@@ -36,21 +36,20 @@
   .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--separator); }
   .foot { margin-top: 22px; text-align: center; font-size: 13px; color: var(--text-3); }
   .foot a { color: var(--text-2); }
-  .shake { animation: shake .4s; }
-  @keyframes shake { 20%,60% { translate: -6px 0; } 40%,80% { translate: 6px 0; } }
+  .warn { min-height: 18px; margin: 8px 4px 0; font-size: 13px; color: var(--text-2); }
 </style>
 </head>
 <body>
 <div class="backdrop" aria-hidden="true"><i></i><i></i><i></i></div>
 
 <main class="page">
-  <header class="brand">
+  <header class="brand rise" style="--i:0">
     <div class="logo" aria-hidden="true">IAS</div>
     <h1>IAS 그룹웨어</h1>
     <p class="muted">통합 행정 플랫폼에 로그인하세요</p>
   </header>
 
-  <form id="loginForm" class="glass card" novalidate autocomplete="on">
+  <form id="loginForm" class="glass card rise" style="--i:1" novalidate autocomplete="on">
     <label class="field">
       <span class="sr-only">회사 코드</span>
       <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4M9 10h.01M15 10h.01M9 13h.01M15 13h.01"/></svg>
@@ -70,7 +69,8 @@
       </button>
     </label>
 
-    <div class="row">
+    <p class="warn" id="warn" aria-live="polite"></p>
+    <div class="row" style="margin-top:6px">
       <label class="check"><input type="checkbox" id="remember"> 로그인 유지</label>
       <button type="button" class="link" id="forgot">비밀번호 찾기</button>
     </div>
@@ -82,7 +82,7 @@
     <button type="button" class="btn btn-glass" id="sso">SSO로 로그인</button>
   </form>
 
-  <p class="foot">계정이 없으신가요? 회사 관리자에게 문의하세요<br>© IAS</p>
+  <p class="foot rise" style="--i:3">계정이 없으신가요? 회사 관리자에게 문의하세요<br>© IAS</p>
 </main>
 
 <script src="js/login.js"></script>
