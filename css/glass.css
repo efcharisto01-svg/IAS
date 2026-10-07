@@ -187,20 +187,61 @@ body {
 .combo-hint { padding: 6px 12px 4px; font-size: 12px; color: var(--text-3); }
 
 /* pill scrollbar: no track, no arrows, one rounded thumb sized to the content */
-.scroll-glass, .combo-list { overflow-y: auto; }
-.scroll-glass::-webkit-scrollbar, .combo-list::-webkit-scrollbar { width: 12px; background: transparent; }
-.scroll-glass::-webkit-scrollbar-track, .combo-list::-webkit-scrollbar-track { background: transparent; margin-block: 14px; }
-.scroll-glass::-webkit-scrollbar-button, .combo-list::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
-.scroll-glass::-webkit-scrollbar-corner, .combo-list::-webkit-scrollbar-corner { background: transparent; }
-.scroll-glass::-webkit-scrollbar-thumb, .combo-list::-webkit-scrollbar-thumb {
+.scroll-glass, .combo-list, .tlist { overflow-y: auto; }
+.scroll-glass::-webkit-scrollbar, .combo-list::-webkit-scrollbar, .tlist::-webkit-scrollbar { width: 12px; background: transparent; }
+.scroll-glass::-webkit-scrollbar-track, .combo-list::-webkit-scrollbar-track, .tlist::-webkit-scrollbar-track { background: transparent; margin-block: 14px; }
+.scroll-glass::-webkit-scrollbar-button, .combo-list::-webkit-scrollbar-button, .tlist::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+.scroll-glass::-webkit-scrollbar-corner, .combo-list::-webkit-scrollbar-corner, .tlist::-webkit-scrollbar-corner { background: transparent; }
+.scroll-glass::-webkit-scrollbar-thumb, .combo-list::-webkit-scrollbar-thumb, .tlist::-webkit-scrollbar-thumb {
   background: var(--scroll-thumb); background-clip: padding-box;
   border: 4px solid transparent; border-radius: 999px; min-height: 40px;
 }
-.scroll-glass::-webkit-scrollbar-thumb:hover, .combo-list::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); background-clip: padding-box; }
+.scroll-glass::-webkit-scrollbar-thumb:hover, .combo-list::-webkit-scrollbar-thumb:hover, .tlist::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); background-clip: padding-box; }
 /* Firefox (Chrome 121+ would ignore the webkit rules above if these were set unconditionally) */
 @supports not selector(::-webkit-scrollbar) {
-  .scroll-glass, .combo-list { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
+  .scroll-glass, .combo-list, .tlist { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
 }
+
+/* board with fixed header: column header stays pinned while rows scroll */
+.tlist {
+  --cols: 12px minmax(0, 1fr) 60px 46px; /* dot | title | writer | date — override per board */
+  position: relative; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--r-md);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+}
+.tlist-head {
+  position: sticky; top: 0; z-index: 3;
+  display: grid; grid-template-columns: var(--cols); gap: 8px; align-items: center;
+  padding: 0 12px; height: 38px;
+  font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--text-2);
+  background: var(--pop-bg);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--separator);
+  transition: box-shadow .2s;
+}
+.tlist.scrolled .tlist-head { box-shadow: 0 8px 14px -10px rgba(20, 24, 80, .35); }
+.tlist-head .sort { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; justify-content: flex-end; }
+.tlist-head .sort:focus-visible { outline: 2px solid var(--accent); border-radius: 6px; }
+.tlist-head .sort::after { content: ""; border: 4px solid transparent; border-top-color: currentColor; translate: 0 2px; opacity: .45; }
+.tlist-head .sort[aria-sort="descending"]::after { opacity: 1; }
+.tlist-head .sort[aria-sort="ascending"]::after { opacity: 1; rotate: 180deg; translate: 0 -2px; }
+.tlist-head > :nth-child(3), .tlist-head > :nth-child(4), .tlist-row > .wr, .tlist-row > .dt { text-align: right; }
+.tlist-row {
+  display: grid; grid-template-columns: var(--cols); gap: 8px; align-items: center;
+  padding: 0 12px; min-height: 48px; border-bottom: 1px solid var(--separator);
+  color: inherit; text-decoration: none; cursor: pointer;
+}
+.tlist-row:last-child { border-bottom: 0; }
+.tlist-row:active { background: var(--field-bg); }
+.tlist-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tlist-row .dot { width: 8px; height: 8px; border-radius: 50%; background: transparent; }
+.tlist-row.unread .dot { background: var(--accent); }
+.tlist-row .ti { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 15px; }
+.tlist-row .ti b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tlist-row.unread .ti b { font-weight: 700; }
+.tlist-row .wr, .tlist-row .dt { font-size: 12px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.tlist-row .dt { color: var(--text-3); }
+.tlist-row.pin { background: linear-gradient(90deg, rgba(255, 159, 10, .16), transparent 70%); }
 
 /* motion */
 .rise { animation: rise .6s var(--ease) both; animation-delay: calc(var(--i, 0) * 60ms); }
