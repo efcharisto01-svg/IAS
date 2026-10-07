@@ -1,6 +1,6 @@
 /*
  * IAS list helpers
- *   IAS.stickyShadow(el) - adds .scrolled to a .tlist once it is scrolled, so the pinned header gets a shadow
+ *   IAS.stickyShadow(el) - adds .scrolled to a .hboard (헤더게시판) once it is scrolled, so the pinned header gets a shadow
  */
 (function (global) {
   function stickyShadow(el) {
