@@ -20,6 +20,9 @@
   --field-bg: rgba(120, 120, 128, .12);
   --field-bg-focus: rgba(255, 255, 255, .85);
   --separator: rgba(60, 60, 67, .16);
+  --pop-bg: rgba(250, 251, 255, .98);
+  --opt-hover: rgba(10, 132, 255, .10);
+  --opt-active: rgba(10, 132, 255, .18);
 
   /* backdrop */
   --bg-1: #dfe9ff;
@@ -49,6 +52,9 @@
     --field-bg: rgba(255, 255, 255, .09);
     --field-bg-focus: rgba(255, 255, 255, .16);
     --separator: rgba(255, 255, 255, .14);
+    --pop-bg: rgba(40, 42, 58, .97);
+    --opt-hover: rgba(10, 132, 255, .18);
+    --opt-active: rgba(10, 132, 255, .30);
     --bg-1: #0b1020;
     --bg-2: #1a1030;
     --blob-a: #2f5fd0;
@@ -145,6 +151,37 @@ body {
   -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
 }
 
+/* searchable dropdown (combobox) */
+.combo.open { z-index: 30; }
+.combo .caret { transition: rotate .2s var(--ease); }
+.combo.open .caret { rotate: 180deg; }
+.combo-list {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px);
+  max-height: 248px; overflow-y: auto; overscroll-behavior: contain;
+  margin: 0; padding: 6px; list-style: none;
+  background: var(--pop-bg);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border); border-radius: var(--r-md);
+  box-shadow: 0 16px 40px rgba(20, 24, 80, .22), inset 0 1px 0 rgba(255, 255, 255, .5);
+  transform-origin: top center;
+  animation: pop-in .18s var(--ease);
+}
+.combo.up .combo-list { top: auto; bottom: calc(100% + 6px); transform-origin: bottom center; }
+@keyframes pop-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } to { opacity: 1; transform: none; } }
+.combo-list[hidden] { display: none; }
+.combo-opt {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 11px 12px; border-radius: 12px; cursor: pointer; min-height: 44px;
+}
+.combo-opt .nm { font-size: 16px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combo-opt .cd { flex: none; font-size: 12px; color: var(--text-3); font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.combo-opt mark { background: none; color: var(--accent); font-weight: 700; }
+.combo-opt[aria-selected="true"] { background: var(--opt-hover); }
+.combo-opt.chosen .nm::after { content: " \2713"; color: var(--accent); }
+.combo-opt:active { background: var(--opt-active); }
+.combo-empty { padding: 18px 12px; text-align: center; font-size: 14px; color: var(--text-2); }
+.combo-hint { padding: 6px 12px 4px; font-size: 12px; color: var(--text-3); }
+
 /* motion */
 .rise { animation: rise .6s var(--ease) both; animation-delay: calc(var(--i, 0) * 60ms); }
 @keyframes rise { from { opacity: 0; transform: translateY(24px) scale(.97); } to { opacity: 1; transform: none; } }
@@ -163,7 +200,7 @@ body {
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 @media (prefers-reduced-motion: reduce) {
-  .backdrop i, .spinner, .rise { animation: none; }
+  .backdrop i, .spinner, .rise, .combo-list { animation: none; }
   * { transition: none !important; }
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {

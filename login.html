@@ -50,11 +50,15 @@
   </header>
 
   <form id="loginForm" class="glass card rise" style="--i:1" novalidate autocomplete="on">
-    <label class="field">
-      <span class="sr-only">회사 코드</span>
+    <div class="field combo" id="companyBox">
       <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4M9 10h.01M15 10h.01M9 13h.01M15 13h.01"/></svg>
-      <input id="company" name="company" placeholder="회사 코드" autocomplete="organization" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="text" required>
-    </label>
+      <input id="company" type="text" role="combobox" aria-label="회사" aria-autocomplete="list" aria-expanded="false" aria-controls="companyList" placeholder="회사 검색 (이름 또는 코드)" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next">
+      <input id="companyCode" name="company" type="hidden">
+      <button type="button" class="trailing" id="companyToggle" tabindex="-1" aria-label="회사 목록 열기">
+        <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <ul class="combo-list" id="companyList" role="listbox" aria-label="회사 목록" hidden></ul>
+    </div>
     <label class="field">
       <span class="sr-only">아이디</span>
       <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>
