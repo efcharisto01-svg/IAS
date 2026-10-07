@@ -19,7 +19,7 @@
     del: (k) => { try { localStorage.removeItem(k); } catch (_) {} },
   };
 
-  // ---- company combobox
+  // ---- company combobox (shared component: js/combobox.js)
   // TODO: replace with GET /api/tenants?q=<text> -> [{ code, name }]
   const COMPANIES = [
     { code: 'acme', name: '에이씨엠이 주식회사' }, { code: 'daehan', name: '대한물산' },
@@ -28,84 +28,21 @@
     { code: 'bluesea', name: '블루씨 로지스틱스' }, { code: 'greenfield', name: '그린필드 에너지' },
     { code: 'hana', name: '하나메디칼' }, { code: 'onda', name: '온다 미디어' },
   ];
-  const box = $('companyBox'), cInput = $('company'), cCode = $('companyCode'), cList = $('companyList');
-  let shown = [], active = -1;
-
-  const esc = (s) => s.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
-  const mark = (text, q) => {
-    if (!q) return esc(text);
-    const i = text.toLowerCase().indexOf(q.toLowerCase());
-    return i < 0 ? esc(text) : esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + q.length)) + '</mark>' + esc(text.slice(i + q.length));
-  };
   const recent = () => store.get('ias.recentCompanies') || [];
-
-  function filter(q) {
-    q = q.trim().toLowerCase();
-    if (!q) {
-      const r = recent().map((c) => COMPANIES.find((x) => x.code === c)).filter(Boolean);
-      return r.concat(COMPANIES.filter((x) => !r.includes(x)));
-    }
-    return COMPANIES.filter((c) => c.name.toLowerCase().includes(q) || c.code.includes(q));
-  }
-
-  function draw() {
-    const q = cInput.value === (COMPANIES.find((c) => c.code === cCode.value) || {}).name ? '' : cInput.value;
-    shown = filter(q); active = shown.length ? 0 : -1;
-    if (!shown.length) { cList.innerHTML = '<li class="combo-empty" role="presentation">검색 결과가 없습니다. 회사 관리자에게 코드를 확인해 주세요.</li>'; return; }
-    const hint = !q && recent().length ? '<li class="combo-hint" role="presentation">최근 사용한 회사</li>' : '';
-    cList.innerHTML = hint + shown.map((c, i) =>
-      `<li class="combo-opt${c.code === cCode.value ? ' chosen' : ''}" role="option" id="opt-${i}" data-i="${i}" aria-selected="${i === active}"><span class="nm">${mark(c.name, q)}</span><span class="cd">${mark(c.code, q)}</span></li>`).join('');
-  }
-  function setActive(i) {
-    if (!shown.length) return;
-    active = (i + shown.length) % shown.length;
-    cList.querySelectorAll('.combo-opt').forEach((o) => o.setAttribute('aria-selected', String(+o.dataset.i === active)));
-    const el = $('opt-' + active); cInput.setAttribute('aria-activedescendant', 'opt-' + active);
-    if (el) el.scrollIntoView({ block: 'nearest' });
-  }
-  function open() {
-    draw(); cList.hidden = false; box.classList.add('open'); cInput.setAttribute('aria-expanded', 'true');
-    const r = box.getBoundingClientRect();
-    box.classList.toggle('up', window.innerHeight - r.bottom < 280 && r.top > 280);
-    setActive(0);
-  }
-  function close() { cList.hidden = true; box.classList.remove('open'); cInput.setAttribute('aria-expanded', 'false'); cInput.removeAttribute('aria-activedescendant'); }
-  function choose(c) {
-    cCode.value = c.code; cInput.value = c.name;
-    box.classList.remove('invalid'); err.textContent = ''; close();
-  }
-  function settle() { // on blur: exact code/name match counts as a choice
-    const t = cInput.value.trim().toLowerCase();
-    if (!t) { cCode.value = ''; return; }
-    const m = COMPANIES.find((c) => c.code === t || c.name.toLowerCase() === t);
-    if (m) { cCode.value = m.code; cInput.value = m.name; } else cCode.value = '';
-  }
-
-  cInput.addEventListener('input', () => { cCode.value = ''; box.classList.remove('invalid'); err.textContent = ''; open(); });
-  cInput.addEventListener('focus', () => { if (cList.hidden) open(); });
-  cInput.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); cList.hidden ? open() : setActive(active + 1); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); cList.hidden ? open() : setActive(active - 1); }
-    else if (e.key === 'Enter' && !cList.hidden && active >= 0) { e.preventDefault(); choose(shown[active]); $('userId').focus(); }
-    else if (e.key === 'Escape') close();
-    else if (e.key === 'Tab') { if (!cList.hidden && active >= 0 && cInput.value.trim()) choose(shown[active]); close(); }
+  const company = IAS.combo($('companyBox'), {
+    items: COMPANIES.map((c) => ({ value: c.code, label: c.name, sub: c.code })),
+    recent, recentLabel: '최근 사용한 회사',
+    emptyText: '검색 결과가 없습니다. 회사 관리자에게 코드를 확인해 주세요.',
+    hidden: $('companyCode'),
+    onChange: () => { err.textContent = ''; },
+    onPick: () => $('userId').focus(),
   });
-  cInput.addEventListener('blur', () => setTimeout(() => { if (!box.contains(document.activeElement)) { settle(); close(); } }, 120));
-  cList.addEventListener('pointerdown', (e) => e.preventDefault()); // keep input focus
-  cList.addEventListener('click', (e) => {
-    const o = e.target.closest('.combo-opt'); if (!o) return;
-    choose(shown[+o.dataset.i]); $('userId').focus();
-  });
-  $('companyToggle').addEventListener('pointerdown', (e) => e.preventDefault());
-  $('companyToggle').addEventListener('click', () => { if (cList.hidden) { cInput.focus(); open(); } else close(); });
-  document.addEventListener('pointerdown', (e) => { if (!box.contains(e.target)) close(); });
+  const box = company.el;
 
   // ---- restore remembered tenant/user (never the password)
   const saved = store.get('ias.login');
-  const savedCo = saved && COMPANIES.find((c) => c.code === saved.company);
-  if (savedCo) { cCode.value = savedCo.code; cInput.value = savedCo.name; }
-  if (saved) { $('userId').value = saved.userId || ''; $('remember').checked = true; }
-  (savedCo ? (saved.userId ? $('password') : $('userId')) : cInput).focus({ preventScroll: true });
+  if (saved) { company.set(saved.company); $('userId').value = saved.userId || ''; $('remember').checked = true; }
+  (company.value ? (saved.userId ? $('password') : $('userId')) : { focus: (o) => company.focus(o) }).focus({ preventScroll: true });
 
   // ---- password visibility
   $('togglePw').addEventListener('click', () => {
@@ -173,9 +110,9 @@
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (btn.disabled) return;
-    settle();
-    const p = { company: cCode.value, userId: $('userId').value.trim(), password: $('password').value };
-    if (!p.company) return fail(cInput.value.trim() ? '목록에서 회사를 선택해 주세요.' : '회사를 선택해 주세요.', cInput, box);
+    company.settle();
+    const p = { company: company.value, userId: $('userId').value.trim(), password: $('password').value };
+    if (!p.company) return fail(company.text ? '목록에서 회사를 선택해 주세요.' : '회사를 선택해 주세요.', company.input, box);
     if (!p.userId) return fail('아이디를 입력해 주세요.', $('userId'));
     if (!p.password) return fail('비밀번호를 입력해 주세요.', $('password'));
 
