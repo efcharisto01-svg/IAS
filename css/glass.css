@@ -1,0 +1,165 @@
+/* IAS Glass Design System — iOS-style liquid glass (mobile first) */
+:root {
+  /* brand */
+  --accent: #0a84ff;
+  --accent-press: #0071e3;
+  --danger: #ff453a;
+  --success: #30d158;
+
+  /* text */
+  --text: #111418;
+  --text-2: rgba(60, 60, 67, .68);
+  --text-3: rgba(60, 60, 67, .42);
+
+  /* glass */
+  --glass-bg: rgba(255, 255, 255, .55);
+  --glass-bg-strong: rgba(255, 255, 255, .72);
+  --glass-border: rgba(255, 255, 255, .7);
+  --glass-shadow: 0 8px 32px rgba(31, 38, 135, .14), inset 0 1px 0 rgba(255, 255, 255, .8);
+  --glass-blur: blur(28px) saturate(180%);
+  --field-bg: rgba(120, 120, 128, .12);
+  --field-bg-focus: rgba(255, 255, 255, .85);
+  --separator: rgba(60, 60, 67, .16);
+
+  /* backdrop */
+  --bg-1: #dfe9ff;
+  --bg-2: #f3e6ff;
+  --blob-a: #7aa8ff;
+  --blob-b: #ff9ec7;
+  --blob-c: #7fe3d1;
+
+  /* shape / type */
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 28px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo",
+          "Pretendard", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #f5f5f7;
+    --text-2: rgba(235, 235, 245, .66);
+    --text-3: rgba(235, 235, 245, .38);
+    --glass-bg: rgba(44, 44, 56, .5);
+    --glass-bg-strong: rgba(58, 58, 72, .66);
+    --glass-border: rgba(255, 255, 255, .14);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .12);
+    --field-bg: rgba(255, 255, 255, .09);
+    --field-bg-focus: rgba(255, 255, 255, .16);
+    --separator: rgba(255, 255, 255, .14);
+    --bg-1: #0b1020;
+    --bg-2: #1a1030;
+    --blob-a: #2f5fd0;
+    --blob-b: #a1306a;
+    --blob-c: #1d8f80;
+    --accent: #0a84ff;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  font-family: var(--font);
+  color: var(--text);
+  background: linear-gradient(160deg, var(--bg-1), var(--bg-2));
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+/* animated mesh backdrop */
+.backdrop { position: fixed; inset: 0; z-index: -1; overflow: hidden; }
+.backdrop i {
+  position: absolute; width: 60vmax; height: 60vmax; border-radius: 50%;
+  filter: blur(80px); opacity: .65;
+  animation: float 18s var(--ease) infinite alternate;
+}
+.backdrop i:nth-child(1) { background: var(--blob-a); top: -20vmax; left: -15vmax; }
+.backdrop i:nth-child(2) { background: var(--blob-b); bottom: -22vmax; right: -18vmax; animation-delay: -6s; }
+.backdrop i:nth-child(3) { background: var(--blob-c); top: 35%; left: 40%; width: 40vmax; height: 40vmax; animation-delay: -12s; }
+@keyframes float { to { transform: translate3d(6vmax, 4vmax, 0) scale(1.12); } }
+
+/* glass surface */
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--r-lg);
+}
+
+/* form field (16px font prevents iOS zoom-on-focus) */
+.field { position: relative; display: block; }
+.field + .field { margin-top: 10px; }
+.field input {
+  width: 100%; height: 52px; padding: 0 16px 0 46px;
+  font: inherit; font-size: 16px; color: var(--text);
+  background: var(--field-bg);
+  border: 1px solid transparent; border-radius: var(--r-md);
+  outline: none; transition: background .2s, border-color .2s, box-shadow .2s;
+  -webkit-appearance: none; appearance: none;
+}
+.field input::placeholder { color: var(--text-3); }
+.field input:focus {
+  background: var(--field-bg-focus);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(10, 132, 255, .18);
+}
+.field.invalid input { border-color: var(--danger); box-shadow: 0 0 0 4px rgba(255, 69, 58, .15); }
+.field .ico {
+  position: absolute; left: 15px; top: 50%; translate: 0 -50%;
+  width: 20px; height: 20px; color: var(--text-3); pointer-events: none;
+}
+.field .trailing {
+  position: absolute; right: 6px; top: 50%; translate: 0 -50%;
+  width: 40px; height: 40px; border: 0; background: none; color: var(--text-3);
+  display: grid; place-items: center; cursor: pointer; border-radius: 50%;
+}
+.field .trailing svg { width: 20px; height: 20px; }
+.field:has(.trailing) input { padding-right: 48px; }
+
+/* buttons */
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; height: 52px; border: 0; border-radius: var(--r-md);
+  font: inherit; font-size: 17px; font-weight: 600; cursor: pointer;
+  transition: transform .15s var(--ease), background .2s, opacity .2s;
+}
+.btn:active { transform: scale(.97); }
+.btn:disabled { opacity: .6; pointer-events: none; }
+.btn-primary {
+  color: #fff;
+  background: linear-gradient(180deg, #3b9bff, var(--accent));
+  box-shadow: 0 6px 18px rgba(10, 132, 255, .35), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+.btn-primary:active { background: var(--accent-press); }
+.btn-glass {
+  color: var(--text); background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+}
+
+/* misc */
+.link { color: var(--accent); text-decoration: none; font-size: 15px; background: none; border: 0; padding: 0; font-family: inherit; cursor: pointer; }
+.muted { color: var(--text-2); }
+.spinner {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 2.5px solid rgba(255, 255, 255, .4); border-top-color: #fff;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { rotate: 360deg; } }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop i, .spinner { animation: none; }
+  * { transition: none !important; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass, .btn-glass { background: var(--glass-bg-strong); }
+}
