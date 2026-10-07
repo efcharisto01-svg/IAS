@@ -187,38 +187,41 @@ body {
 .combo-hint { padding: 6px 12px 4px; font-size: 12px; color: var(--text-3); }
 
 /* pill scrollbar: no track, no arrows, one rounded thumb sized to the content */
-.scroll-glass, .combo-list, .hboard { overflow-y: auto; }
-.scroll-glass::-webkit-scrollbar, .combo-list::-webkit-scrollbar, .hboard::-webkit-scrollbar { width: 12px; background: transparent; }
-.scroll-glass::-webkit-scrollbar-track, .combo-list::-webkit-scrollbar-track, .hboard::-webkit-scrollbar-track { background: transparent; margin-block: 14px; }
-.scroll-glass::-webkit-scrollbar-button, .combo-list::-webkit-scrollbar-button, .hboard::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
-.scroll-glass::-webkit-scrollbar-corner, .combo-list::-webkit-scrollbar-corner, .hboard::-webkit-scrollbar-corner { background: transparent; }
-.scroll-glass::-webkit-scrollbar-thumb, .combo-list::-webkit-scrollbar-thumb, .hboard::-webkit-scrollbar-thumb {
+.scroll-glass, .combo-list, .hboard-body { overflow-y: auto; }
+.scroll-glass::-webkit-scrollbar, .combo-list::-webkit-scrollbar, .hboard-body::-webkit-scrollbar { width: 12px; background: transparent; }
+.scroll-glass::-webkit-scrollbar-track, .combo-list::-webkit-scrollbar-track, .hboard-body::-webkit-scrollbar-track { background: transparent; margin-block: 14px; }
+.hboard-body::-webkit-scrollbar-track { margin-block: 8px 14px; }
+.scroll-glass::-webkit-scrollbar-button, .combo-list::-webkit-scrollbar-button, .hboard-body::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+.scroll-glass::-webkit-scrollbar-corner, .combo-list::-webkit-scrollbar-corner, .hboard-body::-webkit-scrollbar-corner { background: transparent; }
+.scroll-glass::-webkit-scrollbar-thumb, .combo-list::-webkit-scrollbar-thumb, .hboard-body::-webkit-scrollbar-thumb {
   background: var(--scroll-thumb); background-clip: padding-box;
   border: 4px solid transparent; border-radius: 999px; min-height: 40px;
 }
-.scroll-glass::-webkit-scrollbar-thumb:hover, .combo-list::-webkit-scrollbar-thumb:hover, .hboard::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); background-clip: padding-box; }
+.scroll-glass::-webkit-scrollbar-thumb:hover, .combo-list::-webkit-scrollbar-thumb:hover, .hboard-body::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); background-clip: padding-box; }
 /* Firefox (Chrome 121+ would ignore the webkit rules above if these were set unconditionally) */
 @supports not selector(::-webkit-scrollbar) {
-  .scroll-glass, .combo-list, .hboard { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
+  .scroll-glass, .combo-list, .hboard-body { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
 }
 
 /* 헤더게시판 (.hboard): board with a fixed column header that stays pinned while rows scroll */
 .hboard {
   --cols: 12px minmax(0, 1fr) 60px 46px; /* dot | title | writer | date — override per board */
-  position: relative; overflow-y: auto; overscroll-behavior: contain;
+  --sb: 12px; /* scrollbar width, keeps head and rows aligned */
+  display: flex; flex-direction: column; overflow: hidden;
   background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--r-md);
   -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
 }
+/* head sits outside the scroller: always fixed, full width, scrollbar starts right below it */
 .hboard-head {
-  position: sticky; top: 0; z-index: 3;
+  flex: none; position: relative; z-index: 3;
   display: grid; grid-template-columns: var(--cols); gap: 8px; align-items: center;
-  padding: 0 12px; height: 38px;
+  padding: 0 calc(12px + var(--sb)) 0 12px; height: 38px;
   font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--text-2);
   background: var(--pop-bg);
-  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
   border-bottom: 1px solid var(--separator);
   transition: box-shadow .2s;
 }
+.hboard-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .hboard.scrolled .hboard-head { box-shadow: 0 8px 14px -10px rgba(20, 24, 80, .35); }
 .hboard-head .sort { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; justify-content: flex-end; }
 .hboard-head .sort:focus-visible { outline: 2px solid var(--accent); border-radius: 6px; }
