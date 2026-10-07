@@ -21,6 +21,8 @@
   --field-bg-focus: rgba(255, 255, 255, .85);
   --separator: rgba(60, 60, 67, .16);
   --pop-bg: rgba(250, 251, 255, .98);
+  --scroll-thumb: rgba(60, 60, 67, .32);
+  --scroll-thumb-hover: rgba(60, 60, 67, .55);
   --opt-hover: rgba(10, 132, 255, .10);
   --opt-active: rgba(10, 132, 255, .18);
 
@@ -53,6 +55,8 @@
     --field-bg-focus: rgba(255, 255, 255, .16);
     --separator: rgba(255, 255, 255, .14);
     --pop-bg: rgba(40, 42, 58, .97);
+    --scroll-thumb: rgba(235, 235, 245, .32);
+    --scroll-thumb-hover: rgba(235, 235, 245, .55);
     --opt-hover: rgba(10, 132, 255, .18);
     --opt-active: rgba(10, 132, 255, .30);
     --bg-1: #0b1020;
@@ -181,6 +185,22 @@ body {
 .combo-opt:active { background: var(--opt-active); }
 .combo-empty { padding: 18px 12px; text-align: center; font-size: 14px; color: var(--text-2); }
 .combo-hint { padding: 6px 12px 4px; font-size: 12px; color: var(--text-3); }
+
+/* pill scrollbar: no track, no arrows, one rounded thumb sized to the content */
+.scroll-glass, .combo-list { overflow-y: auto; }
+.scroll-glass::-webkit-scrollbar, .combo-list::-webkit-scrollbar { width: 12px; background: transparent; }
+.scroll-glass::-webkit-scrollbar-track, .combo-list::-webkit-scrollbar-track { background: transparent; margin-block: 14px; }
+.scroll-glass::-webkit-scrollbar-button, .combo-list::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+.scroll-glass::-webkit-scrollbar-corner, .combo-list::-webkit-scrollbar-corner { background: transparent; }
+.scroll-glass::-webkit-scrollbar-thumb, .combo-list::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb); background-clip: padding-box;
+  border: 4px solid transparent; border-radius: 999px; min-height: 40px;
+}
+.scroll-glass::-webkit-scrollbar-thumb:hover, .combo-list::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); background-clip: padding-box; }
+/* Firefox (Chrome 121+ would ignore the webkit rules above if these were set unconditionally) */
+@supports not selector(::-webkit-scrollbar) {
+  .scroll-glass, .combo-list { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
+}
 
 /* motion */
 .rise { animation: rise .6s var(--ease) both; animation-delay: calc(var(--i, 0) * 60ms); }
