@@ -19,7 +19,7 @@
  *   });
  *   co.value  -> selected value or ''      co.set(value)   co.clear()
  *   co.settle() -> exact label/value match counts as a choice (call before submit)
- *   co.focus()   co.setItems(items)   co.el
+ *   co.focus()   co.setItems(items)   co.setEmptyText(text)   co.el
  */
 (function (global) {
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -33,7 +33,7 @@
     const input = box.querySelector('input[role="combobox"]');
     const list = box.querySelector('.combo-list');
     const toggle = box.querySelector('.trailing');
-    const emptyText = opts.emptyText || '검색 결과가 없습니다.';
+    let emptyText = opts.emptyText || '검색 결과가 없습니다.';
     const recentLabel = opts.recentLabel || '최근 사용';
     let items = opts.items || [], shown = [], active = -1, current = null;
 
@@ -114,6 +114,7 @@
       clear() { input.value = ''; commit(null); },
       settle, close, focus(opts2) { input.focus(opts2); },
       setItems(next) { items = next || []; },
+      setEmptyText(t) { emptyText = t; },
     };
   }
 
