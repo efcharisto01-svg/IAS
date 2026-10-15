@@ -5,6 +5,7 @@
  *
  * - Bell shows the number of unread notifications. The panel shows "전체 N건 · 안 읽음 M건".
  * - Click a notification: it is marked read and its page opens.
+ * - Device notifications (Web Push) are switched on in the panel; js/push.js and sw.js must be loaded/served.
  * - The server is asked every 30 seconds (paused while the tab is hidden). The server hides
  *   notifications from apps the user may not use and deletes the ones older than 60 days.
  */
@@ -58,8 +59,10 @@
     const tAll = el('button', 'notif-tab'); const tUn = el('button', 'notif-tab');
     [tAll, tUn].forEach((t) => { t.type = 'button'; tabs.appendChild(t); });
     const list = el('div', 'notif-list');
+    const pushRow = el('div', 'notif-push'); const pushText = el('div', 'notif-push-text'); const pushBtn = el('button', 'notif-push-btn'); pushBtn.type = 'button';
+    pushRow.append(pushText, pushBtn);
     const foot = el('div', 'notif-foot', '최근 60일 알림만 보관됩니다');
-    [head, tabs, list, foot].forEach((n) => panel.appendChild(n));
+    [head, tabs, list, pushRow, foot].forEach((n) => panel.appendChild(n));
     document.body.append(bar, scrim, panel);
 
     let data = { total: 0, unread: 0, items: [] }, filter = 'all', loaded = false, timer = null, destroyed = false;
@@ -87,6 +90,28 @@
       });
     }
 
+    // device notifications (browser / OS decide how long they stay on screen)
+    const PUSH_TEXT = {
+      on: ['컴퓨터·휴대폰 알림 켜짐', '끄기'], off: ['컴퓨터·휴대폰 알림 꺼짐', '켜기'],
+      denied: ['브라우저 설정에서 이 사이트의 알림을 허용해 주세요', null],
+      insecure: ['보안 연결(HTTPS)에서만 기기 알림을 쓸 수 있습니다', null],
+      'ios-install': ['아이폰은 홈 화면에 추가한 뒤 기기 알림을 받을 수 있습니다', null],
+      unsupported: ['이 브라우저는 기기 알림을 지원하지 않습니다', null],
+    };
+    let pushState = 'unsupported';
+    async function renderPush(s) {
+      pushState = s || (global.IAS.push ? await global.IAS.push.state() : 'unsupported');
+      const [text, btn] = PUSH_TEXT[pushState];
+      pushText.textContent = text; pushBtn.hidden = !btn; if (btn) pushBtn.textContent = btn;
+      pushRow.title = '알림이 화면에 떠 있는 시간은 브라우저와 기기 설정을 따릅니다';
+    }
+    pushBtn.addEventListener('click', async () => {
+      pushBtn.disabled = true;
+      try { await renderPush(pushState === 'on' ? await global.IAS.push.disable() : await global.IAS.push.enable()); }
+      catch (_) { await renderPush(); }
+      pushBtn.disabled = false;
+    });
+
     function open_(n) {
       if (!n.read) { n.read = true; data.unread = Math.max(0, data.unread - 1); post(`/api/notifications/${n.id}/read`).catch(() => {}); }
       render();
@@ -108,7 +133,7 @@
 
     function setOpen(on) {
       panel.classList.toggle('on', on); scrim.classList.toggle('on', on); bell.setAttribute('aria-expanded', String(on));
-      if (on) refresh();
+      if (on) { refresh(); renderPush(); }
     }
     bell.addEventListener('click', () => setOpen(!panel.classList.contains('on')));
     scrim.addEventListener('click', () => setOpen(false));
@@ -125,6 +150,7 @@
     const onVis = () => { if (document.hidden) stop(); else { refresh(); start(); } };
     document.addEventListener('visibilitychange', onVis);
     render(); refresh(); if (!document.hidden) start();
+    if (global.IAS.push) { global.IAS.push.register().then(() => { global.IAS.push.sync(); renderPush(); }); global.IAS.push.onMessage(refresh); }
 
     return {
       refresh,

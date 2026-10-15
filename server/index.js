@@ -3,7 +3,9 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, extname, normalize, sep } from 'node:path';
 import { openDb, now, seedDemo, effectivePermissions, DEMO_PASSWORD } from './db.js';
-import { listFor, markRead, markAllRead, purgeOld, notify } from './notifications.js';
+import { listFor, markRead, markAllRead, purgeOld, notify, onNotify } from './notifications.js';
+import { loadVapid, sendPush, validSubscription } from './push.js';
+import { can } from './db.js';
 import { hashPassword, verifyPassword, DUMMY_HASH, newToken, sha256, parseCookies, cookie, passwordProblem } from './security.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -17,10 +19,11 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=u
 
 class HttpError extends Error { constructor(status, code, extra) { super(code); this.status = status; this.code = code; this.extra = extra; } }
 
-export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = false, trustProxy = false, seed = true } = {}) {
+export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = false, trustProxy = false, seed = true, pushFetch = fetch, pushSubject = process.env.IAS_PUSH_SUBJECT || 'mailto:admin@example.com' } = {}) {
   const db = openDb(dbFile);
   const seeded = seed ? seedDemo(db) : false;
   const ipFails = new Map(); // ip -> [timestamps]
+  const vapid = loadVapid(db);
   if (seeded) { // dev only: a couple of system notices for the demo accounts
     const t = now();
     for (const u of db.prepare("SELECT id, tenant_id FROM users WHERE login_id IN ('kim', 'admin')").all()) {
@@ -28,6 +31,20 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       notify(db, { tenantId: u.tenant_id, userId: u.id, source: '시스템', title: '비밀번호 변경 안내', body: '90일이 지났습니다. 비밀번호를 변경해 주세요', link: 'change-password.html', at: t - 95 * 60 });
     }
   }
+
+  // Device notifications: every stored notification is also pushed to the user's devices.
+  const pending = new Set();
+  const offNotify = onNotify((ndb, n) => {
+    if (ndb !== db) return;
+    if (n.app !== null && !can(effectivePermissions(db, n.userId), 'app', n.app)) return; // cannot use that app: no push either
+    for (const sub of q.subs.all(n.userId)) {
+      const job = sendPush(sub, { id: n.id, source: n.source, title: n.title, body: n.body, link: n.link }, { vapid, subject: pushSubject, fetchImpl: pushFetch })
+        .then((r) => { if (r.gone) q.subDelAny.run(sub.endpoint); })
+        .catch(() => {})
+        .finally(() => pending.delete(job));
+      pending.add(job);
+    }
+  });
   purgeOld(db);
   const purgeTimer = setInterval(() => { try { purgeOld(db); } catch (e) { console.error(e); } }, 6 * 3600 * 1000);
   purgeTimer.unref();
@@ -47,6 +64,11 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
     purge: db.prepare('DELETE FROM sessions WHERE expires_at < ?'),
     tenantById: db.prepare('SELECT id, code, name FROM tenants WHERE id = ?'),
     setPw: db.prepare('UPDATE users SET pw_hash = ?, must_change_pw = 0 WHERE id = ?'),
+    subs: db.prepare('SELECT * FROM push_subscriptions WHERE user_id = ?'),
+    subCount: db.prepare('SELECT COUNT(*) AS n FROM push_subscriptions WHERE user_id = ?'),
+    subUpsert: db.prepare('INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, ua, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, ua = excluded.ua'),
+    subDel: db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?'),
+    subDelAny: db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?'),
     audit: db.prepare('INSERT INTO audit_log (at, tenant_id, user_id, event, ip, detail) VALUES (?, ?, ?, ?, ?, ?)'),
   };
   const audit = (event, { tenantId = null, userId = null, ip = null, detail = null } = {}) => q.audit.run(now(), tenantId, userId, event, ip, detail);
@@ -184,6 +206,26 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       send(res, 200, { updated: markAllRead(db, user.id) });
     },
 
+    'GET /api/push/key': (req, res) => { requireSession(req); send(res, 200, { publicKey: vapid.publicKey }); },
+
+    'POST /api/push/subscribe': async (req, res) => {
+      checkPost(req);
+      const { user } = requireSession(req);
+      const b = await readJson(req);
+      if (!validSubscription(b)) throw new HttpError(400, 'INVALID_SUBSCRIPTION');
+      if (q.subCount.get(user.id).n >= 10 && !q.subs.all(user.id).some((s) => s.endpoint === b.endpoint)) throw new HttpError(400, 'TOO_MANY_DEVICES');
+      q.subUpsert.run(user.id, b.endpoint, b.keys.p256dh, b.keys.auth, String(req.headers['user-agent'] || '').slice(0, 200), now()); // a device that changes user is re-assigned
+      send(res, 200, { ok: true });
+    },
+
+    'POST /api/push/unsubscribe': async (req, res) => {
+      checkPost(req);
+      const { user } = requireSession(req);
+      const b = await readJson(req);
+      if (typeof b.endpoint !== 'string') throw new HttpError(400, 'INVALID_INPUT');
+      send(res, 200, { removed: Number(q.subDel.run(b.endpoint, user.id).changes) });
+    },
+
     'POST /api/auth/change-password': async (req, res) => {
       checkPost(req);
       const { user, sidHash } = requireSession(req);
@@ -204,7 +246,7 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
     let p = decodeURIComponent(url.pathname);
     if (p === '/') p = '/index.html';
     const norm = normalize(p).replace(/^([/\\])+/, '');
-    const ok = /^[\w.-]+\.html$/.test(norm) || /^(css|js)[/\\][\w.-]+\.(css|js)$/.test(norm);
+    const ok = /^[\w.-]+\.html$/.test(norm) || norm === 'sw.js' || /^(css|js)[/\\][\w.-]+\.(css|js)$/.test(norm);
     if (!ok || norm.split(sep).includes('..')) return send(res, 404, 'Not found');
     try {
       const buf = await readFile(join(ROOT, norm));
@@ -238,7 +280,7 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
     }
   });
 
-  return { server, db, seeded, notify: (n) => notify(db, n), close: () => { clearInterval(purgeTimer); server.close(); db.close(); } };
+  return { server, db, seeded, notify: (n) => notify(db, n), flushPush: () => Promise.allSettled([...pending]), close: () => { offNotify(); clearInterval(purgeTimer); server.close(); db.close(); } };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

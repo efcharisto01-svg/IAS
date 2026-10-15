@@ -48,6 +48,13 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at INTEGER NOT NULL, read_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS notifications_user ON notifications(user_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS server_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+-- one row per browser/device that turned on device notifications (Web Push)
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE, p256dh TEXT NOT NULL, auth TEXT NOT NULL, ua TEXT, created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS push_user ON push_subscriptions(user_id);
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY, at INTEGER NOT NULL, tenant_id INTEGER, user_id INTEGER, event TEXT NOT NULL, ip TEXT, detail TEXT
 );

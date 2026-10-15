@@ -3,6 +3,7 @@
  *   const me = await IAS.auth.require();   // redirects to login.html when signed out, change-password.html when required
  *   IAS.auth.can(me, 'app', 'board')       // permission check (role grants + per-user exceptions)
  *   await IAS.auth.logout();
+ * Load js/push.js before this file when device notifications are used.
  * The server enforces permissions too. This is only for what the screen shows.
  */
 (function (global) {
@@ -28,6 +29,7 @@
   }
 
   async function logout() {
+    if (global.IAS.push) await global.IAS.push.unsubscribeThisDevice(); // shared computers: stop device notifications for this user
     try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: '{}' }); } catch (_) {}
     location.replace('login.html');
   }

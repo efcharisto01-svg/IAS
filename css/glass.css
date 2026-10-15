@@ -337,6 +337,12 @@ body {
 .notif-time { align-self: center; white-space: nowrap; font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .notif-body { grid-column: 2 / -1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--text-2); }
 .notif-empty { padding: 36px 16px; text-align: center; font-size: 13px; color: var(--text-3); }
+.notif-push { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--separator); font-size: 12.5px; color: var(--text-2); }
+.notif-push-text { min-width: 0; }
+.notif-push-btn { all: unset; flex: none; cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--accent); background: var(--field-bg); padding: 6px 14px; border-radius: 999px; }
+.notif-push-btn:disabled { opacity: .5; cursor: default; }
+.notif-push-btn:focus-visible { outline: 2px solid var(--accent); }
+.notif-push-btn[hidden] { display: none; }
 .notif-foot { padding: 10px 16px; border-top: 1px solid var(--separator); text-align: center; font-size: 12px; color: var(--text-3); }
 
 /* motion */

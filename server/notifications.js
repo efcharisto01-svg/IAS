@@ -1,6 +1,8 @@
 import { now, effectivePermissions, can } from './db.js';
 
 export const RETENTION_DAYS = 60;
+const hooks = new Set(); // called after a notification is stored (device push)
+export const onNotify = (fn) => { hooks.add(fn); return () => hooks.delete(fn); };
 const LINK_RE = /^\/?[\w.-]+\.html(\?[\w=&%.\-]*)?(#[\w-]*)?$/; // same-site page only
 
 /**
@@ -15,7 +17,9 @@ export function notify(db, { tenantId, userId, app = null, source, title, body =
   if (link !== null && !LINK_RE.test(link)) throw new Error('notify: link must be a same-site .html page');
   const r = db.prepare(`INSERT INTO notifications (tenant_id, user_id, app, source, title, body, link, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(tenantId, userId, app, String(source).slice(0, 20), String(title).slice(0, 120), String(body).slice(0, 200), link, at);
-  return Number(r.lastInsertRowid);
+  const id = Number(r.lastInsertRowid);
+  for (const h of hooks) { try { h(db, { id, tenantId, userId, app, source, title, body, link }); } catch (e) { console.error(e); } }
+  return id;
 }
 
 /** Delete notifications older than RETENTION_DAYS. Returns how many were removed. */

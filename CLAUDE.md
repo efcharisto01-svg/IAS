@@ -16,6 +16,7 @@
 | 헤더게시판 (헤더 고정, 모든 칼럼 정렬: 오름→내림→원상복귀) | `.hboard` `.hboard-head` `.hboard-body` `.hboard-row` | `js/list.js` (`IAS.sortable`, `IAS.stickyShadow`) |
 | 모션 | `.rise` `.shake` `.spinner` | |
 | 로그인 확인·권한·로그아웃 | | `js/auth.js` (`IAS.auth.require`, `can`, `logout`) |
+| 기기 알림 (Web Push, 서비스 워커) | `.notif-push` (패널 안 켜기/끄기 줄) | `js/push.js` (`IAS.push`), `sw.js` |
 | 상단 바 + 알림 (종, 안 읽음 숫자, 알림 패널) | `.topbar` `.ibtn` `.badge` `.avatar` `.notif-panel` `.notif-item` `.has-topbar` | `js/topbar.js` (`IAS.topbar.mount`) |
 
 ## 화면 계획
@@ -24,7 +25,7 @@
 
 ## 서버 (Node.js 22 + SQLite, 외부 패키지 없음)
 - 실행 `npm start` (기본 포트 3000, DB는 `data/ias.db`, 개발용 데모 계정 자동 생성: 회사 acme / admin·kim·newbie / `Demo1234!`). 테스트 `npm test`.
-- 환경변수: `PORT`, `IAS_DB`, `IAS_SECURE=1`(https), `IAS_TRUST_PROXY=1`(프록시 뒤), `IAS_SEED_DEMO=0`(데모 계정 끄기, 운영에서는 반드시 끈다).
+- 환경변수: `PORT`, `IAS_DB`, `IAS_PUSH_SUBJECT`, `IAS_VAPID_PRIVATE`(선택), `IAS_SECURE=1`(https), `IAS_TRUST_PROXY=1`(프록시 뒤), `IAS_SEED_DEMO=0`(데모 계정 끄기, 운영에서는 반드시 끈다).
 - 로그인은 HttpOnly 쿠키 세션. 세션 값은 DB에 해시로만 저장. 비밀번호는 scrypt.
 - 계정 5회 실패 시 5분 잠금, IP별 실패 제한, 모든 POST는 JSON + 같은 출처만 허용.
 
@@ -38,3 +39,7 @@
 - 모든 로그인 후 화면은 `IAS.topbar.mount({ title, me })`로 상단 바를 쓴다. 종의 숫자는 안 읽은 알림 수, 패널은 "전체 N건 · 안 읽음 M건".
 - 알림 보내기는 서버 `notify(db, { tenantId, userId, app, source, title, body, link })` (`server/notifications.js`). `app`은 보낸 앱의 권한 id이고, 그 앱을 쓸 수 없는 사용자에게는 보이지도 세어지지도 않는다. `null`이면 시스템 알림. `link`는 같은 사이트의 `.html` 페이지만 허용.
 - 알림을 누르면 읽음 처리 후 `link` 화면으로 이동. 새 알림은 30초마다 서버에 확인(탭이 숨겨져 있으면 멈춤). 60일이 지난 알림은 서버가 자동 삭제(시작 시 + 6시간마다).
+- 기기 알림(Web Push): 알림 패널에서 사용자가 기기마다 켠다. `notify()`가 저장한 알림은 그 사용자의 켜 둔 기기에도 암호화해서 보낸다(권한 없는 앱의 알림은 보내지 않음). 화면이 떠 있고 포커스가 있으면 기기 알림 대신 종만 갱신한다.
+- 알림이 화면에 떠 있는 시간(예: 30초)은 우리가 정하지 않고 **브라우저와 OS 설정을 따른다.** 개인별 초 설정 화면은 만들지 않는다.
+- 로그아웃하면 그 기기의 기기 알림 구독을 해제한다(공용 컴퓨터 보호). 같은 브라우저를 다른 사용자가 켜면 구독이 그 사용자로 옮겨진다.
+- 운영: 기기 알림은 HTTPS에서만 동작(개발은 localhost 가능). `IAS_PUSH_SUBJECT=mailto:담당자메일`을 설정하고, VAPID 키(DB `server_settings`)를 바꾸면 모든 기기가 다시 켜야 하므로 DB 백업에 포함한다. 아이폰은 홈 화면에 추가한 뒤에만 가능.
