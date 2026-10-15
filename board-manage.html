@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#dfe9ff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1020" media="(prefers-color-scheme: dark)">
+<title>IAS 게시판 관리</title>
+<script src="js/theme.js"></script>
+<link rel="stylesheet" href="css/glass.css">
+<style>
+  /* 레이아웃만. 색·모양은 공용 부품(glass.css)을 쓴다. */
+  .page { max-width: 760px; margin: 0 auto; padding: 8px 14px calc(24px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 12px; }
+  .card { padding: 16px; display: grid; gap: 12px; }
+  .card h2 { margin: 0; font-size: 15px; }
+  .menu-group { margin: 0; }
+  .menu-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .menu-row .sub { font-size: 12px; color: var(--text-3); }
+  .menu-row.hiddenboard .grow { opacity: .55; }
+  .perm { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 62px); align-items: center; gap: 6px; padding: 10px 14px; font-size: 14px; }
+  .perm + .perm { border-top: 1px solid var(--separator); }
+  .perm.head { font-size: 12px; font-weight: 600; color: var(--text-2); padding-block: 8px; }
+  .perm > :nth-child(n+2) { justify-self: center; }
+  .perm .switch { transform: scale(.82); transform-origin: center; }
+  .catrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+  .catrow + .catrow, .catrow + .catadd, .field + .catrow { margin-top: 0; }
+  .catlist { display: grid; gap: 8px; }
+  .catrow .rm { all: unset; cursor: pointer; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: var(--text-2); font-size: 18px; }
+  .catrow .rm:hover { background: var(--opt-hover); color: var(--danger); }
+  .catrow .rm:focus-visible { outline: 2px solid var(--accent); }
+  .catadd { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .catadd .btn { width: auto; padding-inline: 18px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .errmsg { margin: 0 4px; font-size: 13px; color: var(--danger); min-height: 1em; }
+  .hint { font-size: 12px; color: var(--text-3); margin: 8px 4px 0; }
+  .state { padding: 28px 16px; text-align: center; color: var(--text-2); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="backdrop" aria-hidden="true"><i></i><i></i><i></i></div>
+<main class="page" id="page">
+  <section class="glass card rise" style="--i:0" id="listView" hidden>
+    <h2>게시판 목록</h2>
+    <div class="menu-group" id="boardRows"></div>
+    <button class="btn btn-primary" id="newBoard" type="button"><span>새 게시판 만들기</span></button>
+    <p class="hint">읽기·쓰기·고정 권한은 게시판을 만들 때 역할별로 정합니다. 게시판은 지우지 않고 "숨김"으로 감춥니다 (글은 그대로 보관됩니다).</p>
+  </section>
+
+  <form class="glass card rise" style="--i:0" id="editView" novalidate hidden>
+    <h2 id="editTitle">새 게시판</h2>
+    <div class="field" id="nameBox"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg><input id="name" type="text" maxlength="30" placeholder="게시판 이름 (예: 공지사항)" aria-label="게시판 이름" autocomplete="off"></div>
+    <div>
+      <h2>분류 <span class="hint">(선택)</span></h2>
+      <div class="catlist" id="cats" style="margin-top:8px"></div>
+      <div class="catadd" style="margin-top:8px"><div class="field"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg><input id="catNew" type="text" maxlength="20" placeholder="분류 이름" aria-label="분류 이름" autocomplete="off"></div><button class="btn btn-glass" id="catAdd" type="button">추가</button></div>
+    </div>
+    <div>
+      <h2>누가 할 수 있나요?</h2>
+      <div class="menu-group" id="perms" style="margin-top:8px"></div>
+      <p class="hint">회사 관리자는 항상 모든 권한을 가집니다. 쓰기·고정을 켠 역할은 읽기도 함께 켜집니다. "고정"은 공지 고정과 필독 지정입니다.</p>
+    </div>
+    <div class="menu-group" id="hideWrap" hidden>
+      <div class="menu-row static"><span class="grow">숨김 (목록에서 감춤)</span><button class="switch" id="hide" type="button" role="switch" aria-checked="false" aria-label="숨김"></button></div>
+    </div>
+    <p class="errmsg" id="err" role="alert"></p>
+    <div class="two"><button class="btn btn-glass" id="cancel" type="button">취소</button><button class="btn btn-primary" id="save" type="submit"><span>저장</span></button></div>
+  </form>
+  <section class="glass state" id="denied" hidden>게시판 관리는 권한이 있는 사용자만 쓸 수 있습니다.</section>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="js/push.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/profile.js"></script>
+<script src="js/topbar.js"></script>
+<script src="js/board-manage.js"></script>
+</body>
+</html>

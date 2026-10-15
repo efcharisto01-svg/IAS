@@ -265,7 +265,8 @@ export function createBoardApi(db) {
     db.prepare(`DELETE FROM role_grants WHERE kind = 'app' AND resource = ? AND role_id IN (SELECT id FROM roles WHERE tenant_id = ?)`).run(resource, user.tenant_id);
     for (const r of want) {
       db.prepare("INSERT OR IGNORE INTO role_grants (role_id, kind, resource) VALUES (?, 'app', ?)").run(r, resource);
-      db.prepare("INSERT OR IGNORE INTO role_grants (role_id, kind, resource) VALUES (?, 'app', 'board')").run(r, ); // the roles that use a board also get the 게시판 app
+      db.prepare("INSERT OR IGNORE INTO role_grants (role_id, kind, resource) VALUES (?, 'app', 'board')").run(r); // the roles that use a board also get the 게시판 app and its widget
+      db.prepare("INSERT OR IGNORE INTO role_grants (role_id, kind, resource) VALUES (?, 'widget', 'board.recent')").run(r);
     }
   }
   function cleanName(n, max, code) { const s = typeof n === 'string' ? n.trim() : ''; if (!s || s.length > max) throw bad(code); return s; }

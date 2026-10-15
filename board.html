@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#dfe9ff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1020" media="(prefers-color-scheme: dark)">
+<title>IAS 게시판</title>
+<script src="js/theme.js"></script>
+<link rel="stylesheet" href="css/glass.css">
+<style>
+  /* 레이아웃만. 색·모양은 공용 부품(glass.css)을 쓴다. */
+  .page { max-width: 860px; margin: 0 auto; padding: 8px 14px calc(24px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 12px; }
+  .filters { padding: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .filters .field + .field { margin-top: 0; }
+  .filters .wide { grid-column: 1 / -1; }
+  @media (min-width: 720px) { .filters { grid-template-columns: 1fr 1fr 1.4fr auto; } .filters .wide { grid-column: auto; } }
+  .hboard { --cols: 10px minmax(0, 1fr) 72px 56px; height: calc(100dvh - 300px); min-height: 320px; overflow-y: hidden; }
+  @media (min-width: 720px) { .hboard { height: calc(100dvh - 200px); } }
+  .hboard-head { padding-left: 12px; }
+  @media (max-width: 719px) { .hboard-row .ti .tag.sub { display: none; } } /* 폰: 제목이 먼저 보이도록 게시판·분류·첨부 표시는 넓은 화면에서만 */
+  .meta { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 0 4px; font-size: 13px; color: var(--text-2); }
+  .state { padding: 28px 16px; text-align: center; color: var(--text-2); font-size: 14px; }
+  .denied { padding: 28px 18px; text-align: center; }
+  .more { margin: 10px 12px 14px; width: calc(100% - 24px); }
+</style>
+</head>
+<body>
+<div class="backdrop" aria-hidden="true"><i></i><i></i><i></i></div>
+<main class="page" id="page">
+  <section class="glass filters rise" style="--i:0" id="filters" aria-label="검색 조건" hidden>
+    <div class="field combo" id="boardBox">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+      <input id="board" type="text" role="combobox" aria-expanded="false" aria-controls="boardList" aria-label="게시판" placeholder="전체 게시판" autocomplete="off">
+      <button type="button" class="trailing" tabindex="-1" aria-label="게시판 목록"><svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
+      <ul class="combo-list" id="boardList" role="listbox" hidden></ul>
+    </div>
+    <div class="field combo" id="catBox">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+      <input id="cat" type="text" role="combobox" aria-expanded="false" aria-controls="catList" aria-label="분류" placeholder="전체 분류" autocomplete="off">
+      <button type="button" class="trailing" tabindex="-1" aria-label="분류 목록"><svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
+      <ul class="combo-list" id="catList" role="listbox" hidden></ul>
+    </div>
+    <div class="field wide"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="q" type="search" placeholder="제목, 내용, 작성자" autocomplete="off" enterkeyhint="search" aria-label="검색"></div>
+    <button class="btn btn-primary" id="go" type="button"><span>검색</span></button>
+  </section>
+
+  <div class="meta" id="meta" hidden><span id="count"></span><span id="unread"></span></div>
+
+  <section class="hboard scroll-glass rise" style="--i:1" id="list" aria-label="게시글 목록" hidden>
+    <div class="hboard-head" role="row">
+      <button class="sort dotcol" type="button" data-first="desc" aria-label="안 읽음"></button>
+      <button class="sort" type="button">제목</button>
+      <button class="sort" type="button">작성자</button>
+      <button class="sort" type="button" data-first="desc">작성일</button>
+    </div>
+    <div class="hboard-body" id="rows"></div>
+  </section>
+
+  <section class="glass denied" id="denied" hidden><p id="deniedText">이 화면을 볼 수 있는 권한이 없습니다.</p></section>
+</main>
+<script src="js/push.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/profile.js"></script>
+<script src="js/topbar.js"></script>
+<script src="js/combobox.js"></script>
+<script src="js/list.js"></script>
+<script src="js/board.js"></script>
+</body>
+</html>

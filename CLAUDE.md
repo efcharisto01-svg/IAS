@@ -21,6 +21,7 @@
 | 홈 화면 (위젯 그리드 + 앱 아이콘 그리드, 수정 모드·폴더·크기 조절 바) | `.home` `.widgets` `.widget` `.apps` `.app` `.fico` `.edit-x` `.splitter` `.sheet` `.folder-panel` | `js/home.js`, `js/widgets.js` (`IAS.widgets.define`) |
 | 테마 (시스템·라이트·다크, `<head>`에서 먼저 로드) | `html[data-theme]` | `js/theme.js` (`IAS.theme`) |
 | 상단 바 + 알림 (종, 안 읽음 숫자, 알림 패널, 프로필 사진 버튼) | `.topbar` `.ibtn` `.badge` `.avatar` `.notif-panel` `.notif-item` `.has-topbar` | `js/topbar.js` (`IAS.topbar.mount`) |
+| 게시판 부품 (여러 줄 입력, 목록 작은 표시, 본문, 첨부 한 줄, 댓글) | `.textarea` `.tag`(`.req` `.pin` `.cnt`) `.post-body` `.attach`(`.nm` `.sz` `.rm`) `.cmt` | |
 
 ## 화면 계획
 - 홈(구현됨, `home.html`): 위젯 그리드 + 앱 아이콘 그리드. 폰/태블릿 세로는 위아래로 이어서 한 번에 스크롤, 태블릿 가로(`min-width: 900px` + landscape)는 좌우 + 가운데 크기 조절 바. 배치는 사용자별로 서버에 저장(`/api/me/layout`).
@@ -69,4 +70,12 @@
 3. **위젯**: `script`에 적은 파일 `js/widgets/<이름>.js`에서 `IAS.widgets.define(id, { render(body, ctx) {...; return { stop() {} }} })`. 서버 데이터는 `textContent`/DOM으로만 그린다(`innerHTML` 금지). 카드를 누르면 앱 페이지로 이동한다.
 4. **데이터**: 새 테이블은 `server/changelog.js`에 모든 칼럼의 한글명과 함께 등록, 쓰기는 `asUser()` 안에서, 필요하면 `notify()`로 알림.
 5. 홈은 사용자가 쓸 수 있는 앱·위젯만 보여 주며, 새 앱은 맨 끝에 자동으로 나타나고 새 위젯은 "위젯 추가"에서 고른다.
-- 현재 앱: **로그기록**(id `audit`, 위젯 `audit.recent`, 회사 관리자 전용, `log.html`).
+- 현재 앱: **로그기록**(id `audit`, 위젯 `audit.recent`, 회사 관리자 전용, `log.html`), **게시판**(id `board`, 위젯 `board.recent`, `board.html`).
+
+## 게시판 규칙 (`server/board.js`, 화면 `board.html` `post.html` `write.html` `board-manage.html`)
+- 게시판은 여러 개, 각각 분류를 가진다. **읽기·쓰기·고정(공지 고정·필독) 권한은 게시판을 만들 때 역할별로 고른다.** 저장 위치는 `role_grants`의 앱 권한 id `board.read.<게시판id>`, `board.write.<게시판id>`, `board.pin.<게시판id>`. `board.manage`는 게시판 관리와 남의 글·댓글 삭제 권한. 회사 관리자(`*`)는 전부 가진다.
+- 역할에 게시판 권한을 주면 서버가 그 역할에 앱 `board`와 위젯 `board.recent`도 함께 준다. 모든 API는 `board` 앱 권한 + 게시판별 권한을 서버에서 다시 확인한다.
+- 글·댓글 삭제는 숨김(`status='deleted'`)이고 변경 기록에 남는다. 게시판도 지우지 않고 `hidden`으로 감춘다. 분류를 지우면 그 분류의 글은 분류 없음이 된다.
+- 알림: 필독 글 → 그 게시판을 읽을 수 있는 다른 사람 모두, 댓글 → 글쓴이. 링크는 `post.html?id=N`.
+- 본문은 글자만 그린다(HTML 금지): `[[img:번호]]`는 본문 사진, `https://` 주소는 링크. 사진은 브라우저가 1600px JPEG로 줄여 올린다(5MB 이하, 서버가 형식 확인). 파일은 5개·10MB·합계 30MB, 확장자 허용 목록만, 내려받기는 항상 attachment. 글에 붙지 않은 업로드는 하루 뒤 서버가 지운다.
+- 게시판 화면 만들 때 추가한 공용 부품은 위 표의 "게시판 부품" 줄.

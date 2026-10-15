@@ -37,6 +37,8 @@ test('setup: the admin creates a board and chooses who may read, write and pin',
   const boards = await (await api('/api/board/boards', { cookie: kim })).json();
   assert.equal(boards.boards.length, 1); assert.equal(boards.boards[0].name, '공지사항');
   assert.deepEqual(boards.boards[0].categories.map((c) => c.name), ['인사', '총무']); catId = boards.boards[0].categories[0].id;
+  const me = await (await api('/api/auth/me', { cookie: kim })).json();
+  assert.deepEqual(me.catalog.apps.map((a) => a.id), ['board']); assert.deepEqual(me.catalog.widgets.map((w) => w.id), ['board.recent'], 'the roles chosen for a board also get the app and its widget');
   assert.equal(boards.boards[0].canWrite, false); assert.equal(boards.boards[0].canPin, false); assert.equal(boards.canManage, false);
 });
 

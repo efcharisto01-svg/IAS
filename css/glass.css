@@ -587,3 +587,45 @@ body {
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass, .btn-glass { background: var(--glass-bg-strong); }
 }
+
+/* 게시판 부품 (board.html, post.html, write.html) ---------------------------------------- */
+/* 여러 줄 입력창: .field와 같은 모양 */
+.textarea {
+  display: block; width: 100%; min-height: 220px; padding: 12px 14px; resize: vertical;
+  font: inherit; font-size: 16px; line-height: 1.6; color: var(--text);
+  background: var(--field-bg); border: 1px solid transparent; border-radius: var(--r-md); outline: none;
+  transition: background .2s, border-color .2s, box-shadow .2s;
+}
+.textarea::placeholder { color: var(--text-3); }
+.textarea:focus { background: var(--field-bg-focus); border-color: var(--accent); box-shadow: 0 0 0 4px rgba(10, 132, 255, .18); }
+.textarea.compact { min-height: 72px; }
+.textarea.invalid { border-color: var(--danger); box-shadow: 0 0 0 4px rgba(255, 69, 58, .15); }
+/* 목록 제목 옆 작은 표시: [필독] [공지] [분류] [댓글 수] */
+.tag { flex: none; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 1.5; color: var(--text-2); background: var(--field-bg); white-space: nowrap; }
+.tag.req { color: #fff; background: var(--danger); }
+.tag.pin { color: #fff; background: #ff9f0a; }
+.tag.cnt { color: var(--accent); background: transparent; padding-inline: 0; }
+/* 글 본문: 글자만. 줄바꿈 유지, 사진은 본문 안에 */
+.post-body { font-size: 16px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.post-body a { color: var(--accent); }
+.post-body figure { margin: 12px 0; }
+.post-body img { display: block; max-width: 100%; height: auto; border-radius: var(--r-sm); background: var(--field-bg); }
+/* 첨부파일 한 줄 */
+.attach { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--field-bg); color: var(--text); text-decoration: none; font-size: 14px; }
+.attach + .attach { margin-top: 6px; }
+.attach svg { flex: none; width: 18px; height: 18px; color: var(--text-2); }
+.attach .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attach .sz { flex: none; font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.attach .rm { all: unset; flex: none; cursor: pointer; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; color: var(--text-2); }
+.attach .rm:hover { background: var(--opt-hover); color: var(--danger); }
+.attach .rm:focus-visible { outline: 2px solid var(--accent); }
+/* 댓글 한 건 */
+.cmt { padding: 12px 2px; border-bottom: 1px solid var(--separator); }
+.cmt:last-child { border-bottom: 0; }
+.cmt-head { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); }
+.cmt-head b { color: var(--text); font-weight: 600; }
+.cmt-head .when { color: var(--text-3); font-size: 12px; }
+.cmt-head .rm { all: unset; margin-left: auto; cursor: pointer; font-size: 12px; color: var(--text-3); padding: 2px 6px; border-radius: 6px; }
+.cmt-head .rm:hover { color: var(--danger); background: var(--opt-hover); }
+.cmt-head .rm:focus-visible { outline: 2px solid var(--accent); }
+.cmt p { margin: 4px 0 0; font-size: 15px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
