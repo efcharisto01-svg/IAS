@@ -2,6 +2,7 @@
 (async () => {
   const $ = (id) => document.getElementById(id);
   const me = await IAS.auth.require();
+  IAS.topbar.mount({ title: '홈', me });
   const list = (el, items) => { el.textContent = ''; (items.length ? items : ['없음']).forEach((t) => { const s = document.createElement('span'); s.className = 'pill'; s.textContent = t; el.appendChild(s); }); };
   $('hello').textContent = `${me.user.name}님, 환영합니다`;
   $('co').textContent = `${me.user.tenant.name} · ${me.user.loginId}`;

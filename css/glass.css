@@ -21,6 +21,8 @@
   --field-bg-focus: rgba(255, 255, 255, .85);
   --separator: rgba(60, 60, 67, .16);
   --pop-bg: rgba(250, 251, 255, .98);
+  --badge: #ff453a;
+  --unread-bg: rgba(10, 132, 255, .09);
   --scroll-thumb: rgba(60, 60, 67, .32);
   --scroll-thumb-hover: rgba(60, 60, 67, .55);
   --opt-hover: rgba(10, 132, 255, .10);
@@ -55,6 +57,7 @@
     --field-bg-focus: rgba(255, 255, 255, .16);
     --separator: rgba(255, 255, 255, .14);
     --pop-bg: rgba(40, 42, 58, .97);
+    --unread-bg: rgba(10, 132, 255, .20);
     --scroll-thumb: rgba(235, 235, 245, .32);
     --scroll-thumb-hover: rgba(235, 235, 245, .55);
     --opt-hover: rgba(10, 132, 255, .18);
@@ -187,20 +190,20 @@ body {
 .combo-hint { padding: 6px 12px 4px; font-size: 12px; color: var(--text-3); }
 
 /* pill scrollbar: no track, no arrows, one rounded thumb sized to the content */
-.scroll-glass, .combo-list, .hboard-body { overflow-y: auto; }
-.scroll-glass::-webkit-scrollbar, .combo-list::-webkit-scrollbar, .hboard-body::-webkit-scrollbar { width: 12px; background: transparent; }
-.scroll-glass::-webkit-scrollbar-track, .combo-list::-webkit-scrollbar-track, .hboard-body::-webkit-scrollbar-track { background: transparent; margin-block: 14px; }
-.hboard-body::-webkit-scrollbar-track { margin-block: 8px 14px; }
-.scroll-glass::-webkit-scrollbar-button, .combo-list::-webkit-scrollbar-button, .hboard-body::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
-.scroll-glass::-webkit-scrollbar-corner, .combo-list::-webkit-scrollbar-corner, .hboard-body::-webkit-scrollbar-corner { background: transparent; }
-.scroll-glass::-webkit-scrollbar-thumb, .combo-list::-webkit-scrollbar-thumb, .hboard-body::-webkit-scrollbar-thumb {
+.scroll-glass, .combo-list, .hboard-body, .notif-list { overflow-y: auto; }
+.scroll-glass::-webkit-scrollbar, .combo-list::-webkit-scrollbar, .hboard-body::-webkit-scrollbar, .notif-list::-webkit-scrollbar { width: 12px; background: transparent; }
+.scroll-glass::-webkit-scrollbar-track, .combo-list::-webkit-scrollbar-track, .hboard-body::-webkit-scrollbar-track, .notif-list::-webkit-scrollbar-track { background: transparent; margin-block: 14px; }
+.hboard-body::-webkit-scrollbar-track, .notif-list::-webkit-scrollbar-track { margin-block: 8px 14px; }
+.scroll-glass::-webkit-scrollbar-button, .combo-list::-webkit-scrollbar-button, .hboard-body::-webkit-scrollbar-button, .notif-list::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+.scroll-glass::-webkit-scrollbar-corner, .combo-list::-webkit-scrollbar-corner, .hboard-body::-webkit-scrollbar-corner, .notif-list::-webkit-scrollbar-corner { background: transparent; }
+.scroll-glass::-webkit-scrollbar-thumb, .combo-list::-webkit-scrollbar-thumb, .hboard-body::-webkit-scrollbar-thumb, .notif-list::-webkit-scrollbar-thumb {
   background: var(--scroll-thumb); background-clip: padding-box;
   border: 4px solid transparent; border-radius: 999px; min-height: 40px;
 }
-.scroll-glass::-webkit-scrollbar-thumb:hover, .combo-list::-webkit-scrollbar-thumb:hover, .hboard-body::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); background-clip: padding-box; }
+.scroll-glass::-webkit-scrollbar-thumb:hover, .combo-list::-webkit-scrollbar-thumb:hover, .hboard-body::-webkit-scrollbar-thumb:hover, .notif-list::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); background-clip: padding-box; }
 /* Firefox (Chrome 121+ would ignore the webkit rules above if these were set unconditionally) */
 @supports not selector(::-webkit-scrollbar) {
-  .scroll-glass, .combo-list, .hboard-body { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
+  .scroll-glass, .combo-list, .hboard-body, .notif-list { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
 }
 
 /* 헤더게시판 (.hboard): board with a fixed column header that stays pinned while rows scroll.
@@ -258,6 +261,84 @@ body {
 .hboard-row .dt { color: var(--text-3); }
 .hboard-row.pin { background: linear-gradient(90deg, rgba(255, 159, 10, .16), transparent 70%); }
 
+/* top bar + notifications (js/topbar.js). Pages that use the bar add .has-topbar to <body>. */
+.has-topbar { padding-top: calc(64px + env(safe-area-inset-top, 0px)); }
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 30;
+  height: calc(64px + env(safe-area-inset-top, 0px)); padding: env(safe-area-inset-top, 0px) 16px 8px;
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
+}
+.topbar-title { font-size: 22px; font-weight: 800; letter-spacing: -.03em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-tools { display: flex; align-items: center; gap: 8px; flex: none; }
+.ibtn {
+  all: unset; box-sizing: border-box; position: relative; width: 40px; height: 40px; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer; color: var(--text);
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  transition: background .2s, color .2s;
+}
+.ibtn svg { width: 20px; height: 20px; }
+.ibtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ibtn[aria-expanded="true"] { background: var(--accent); color: #fff; }
+.badge {
+  position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box;
+  border-radius: 999px; background: var(--badge); color: #fff; border: 2px solid var(--bg-1);
+  display: grid; place-items: center; font-size: 11px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums;
+}
+.badge[hidden] { display: none; }
+.badge.pop { animation: badge-pop .4s var(--ease); }
+@keyframes badge-pop { 0% { transform: scale(.4); } 60% { transform: scale(1.3); } 100% { transform: scale(1); } }
+.bell.ring svg { animation: bell-ring .7s ease; }
+@keyframes bell-ring { 0%, 100% { rotate: 0deg; } 15% { rotate: 16deg; } 30% { rotate: -14deg; } 45% { rotate: 10deg; } 60% { rotate: -6deg; } }
+.avatar {
+  width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  font-size: 15px; font-weight: 800; color: #fff; border: 2px solid var(--glass-border);
+  background: linear-gradient(145deg, #5eb0ff, #5e5ce6);
+}
+.scrim { position: fixed; inset: 0; z-index: 20; background: rgba(0, 0, 0, .2); opacity: 0; pointer-events: none; transition: opacity .2s; }
+.scrim.on { opacity: 1; pointer-events: auto; }
+.notif-panel {
+  position: fixed; z-index: 40; left: 10px; right: 10px; top: calc(70px + env(safe-area-inset-top, 0px));
+  max-height: calc(100dvh - 84px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--pop-bg); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border); border-radius: 24px; box-shadow: 0 20px 50px rgba(20, 24, 80, .28);
+  transform-origin: top right; opacity: 0; transform: translateY(-8px) scale(.97); pointer-events: none; visibility: hidden;
+  transition: opacity .18s, transform .22s var(--ease), visibility 0s .22s;
+}
+.notif-panel.on { opacity: 1; transform: none; pointer-events: auto; visibility: visible; transition-delay: 0s; }
+@media (min-width: 700px) { .notif-panel { left: auto; right: 16px; width: 400px; } }
+.notif-head { padding: 14px 16px 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.notif-head h2 { margin: 0; font-size: 17px; letter-spacing: -.02em; }
+.notif-sum { margin-top: 2px; font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.notif-sum b { color: var(--badge); }
+.notif-all { all: unset; cursor: pointer; font-size: 13px; font-weight: 700; color: var(--accent); padding: 6px 10px; border-radius: 999px; }
+.notif-all:disabled { color: var(--text-3); cursor: default; }
+.notif-all:focus-visible, .notif-tab:focus-visible, .notif-item:focus-visible { outline: 2px solid var(--accent); }
+.notif-tabs { display: flex; gap: 6px; padding: 0 16px 10px; }
+.notif-tab {
+  all: unset; box-sizing: border-box; cursor: pointer; font-size: 12.5px; padding: 5px 13px; border-radius: 999px;
+  background: var(--field-bg); color: var(--text-2); font-variant-numeric: tabular-nums;
+}
+.notif-tab[aria-pressed="true"] { background: var(--accent); color: #fff; font-weight: 700; }
+.notif-list { flex: 1; min-height: 0; overflow-y: auto; border-top: 1px solid var(--separator); }
+.notif-group { padding: 10px 16px 4px; font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--text-3); }
+.notif-item {
+  all: unset; box-sizing: border-box; position: relative; width: 100%; padding: 12px 16px; cursor: pointer;
+  display: grid; grid-template-columns: 36px 1fr auto; gap: 2px 12px; border-bottom: 1px solid var(--separator); color: var(--text);
+}
+.notif-item:active { background: var(--field-bg); }
+.notif-item.unread { background: var(--unread-bg); }
+.notif-item::before { content: ""; position: absolute; left: 5px; top: 50%; translate: 0 -50%; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); display: none; }
+.notif-item.unread::before { display: block; }
+.notif-ic { grid-row: span 2; width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; color: #fff; font-size: 14px; font-weight: 800; }
+.notif-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 500; }
+.notif-item.unread .notif-title { font-weight: 700; }
+.notif-time { align-self: center; white-space: nowrap; font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.notif-body { grid-column: 2 / -1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--text-2); }
+.notif-empty { padding: 36px 16px; text-align: center; font-size: 13px; color: var(--text-3); }
+.notif-foot { padding: 10px 16px; border-top: 1px solid var(--separator); text-align: center; font-size: 12px; color: var(--text-3); }
+
 /* motion */
 .rise { animation: rise .6s var(--ease) both; animation-delay: calc(var(--i, 0) * 60ms); }
 @keyframes rise { from { opacity: 0; transform: translateY(24px) scale(.97); } to { opacity: 1; transform: none; } }
@@ -276,7 +357,7 @@ body {
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 @media (prefers-reduced-motion: reduce) {
-  .backdrop i, .spinner, .rise, .combo-list { animation: none; }
+  .backdrop i, .spinner, .rise, .combo-list, .badge.pop, .bell.ring svg { animation: none; }
   * { transition: none !important; }
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {

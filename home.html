@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="css/glass.css">
 <style>
   /* 임시 화면: 로그인 결과(사용자, 역할, 허용된 앱과 위젯)를 확인하는 용도. 홈 화면 확정 후 교체한다. */
-  .page { min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom)); max-width: 480px; margin: 0 auto; }
+  .page { min-height: calc(100dvh - 64px - env(safe-area-inset-top, 0px)); display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom)); max-width: 480px; margin: 0 auto; }
   .card { padding: 20px 18px; }
   h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -.4px; }
   dl { margin: 14px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; font-size: 15px; }
@@ -33,6 +33,7 @@
   <button class="btn btn-glass rise" style="--i:1" id="logout" type="button">로그아웃</button>
 </main>
 <script src="js/auth.js"></script>
+<script src="js/topbar.js"></script>
 <script src="js/home-check.js"></script>
 </body>
 </html>

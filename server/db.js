@@ -41,6 +41,13 @@ CREATE TABLE IF NOT EXISTS sessions (
   tenant_id INTEGER NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, ip TEXT, ua TEXT
 );
 CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);
+-- notifications: app = permission resource id (NULL = system, always visible), source = label shown to the user
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY, tenant_id INTEGER NOT NULL, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  app TEXT, source TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', link TEXT,
+  created_at INTEGER NOT NULL, read_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS notifications_user ON notifications(user_id, created_at DESC);
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY, at INTEGER NOT NULL, tenant_id INTEGER, user_id INTEGER, event TEXT NOT NULL, ip TEXT, detail TEXT
 );

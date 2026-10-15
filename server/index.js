@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, extname, normalize, sep } from 'node:path';
 import { openDb, now, seedDemo, effectivePermissions, DEMO_PASSWORD } from './db.js';
+import { listFor, markRead, markAllRead, purgeOld, notify } from './notifications.js';
 import { hashPassword, verifyPassword, DUMMY_HASH, newToken, sha256, parseCookies, cookie, passwordProblem } from './security.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -20,6 +21,16 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
   const db = openDb(dbFile);
   const seeded = seed ? seedDemo(db) : false;
   const ipFails = new Map(); // ip -> [timestamps]
+  if (seeded) { // dev only: a couple of system notices for the demo accounts
+    const t = now();
+    for (const u of db.prepare("SELECT id, tenant_id FROM users WHERE login_id IN ('kim', 'admin')").all()) {
+      notify(db, { tenantId: u.tenant_id, userId: u.id, source: '시스템', title: '새 기기에서 로그인했습니다', body: 'Chrome · Windows', at: t - 26 * 3600 });
+      notify(db, { tenantId: u.tenant_id, userId: u.id, source: '시스템', title: '비밀번호 변경 안내', body: '90일이 지났습니다. 비밀번호를 변경해 주세요', link: 'change-password.html', at: t - 95 * 60 });
+    }
+  }
+  purgeOld(db);
+  const purgeTimer = setInterval(() => { try { purgeOld(db); } catch (e) { console.error(e); } }, 6 * 3600 * 1000);
+  purgeTimer.unref();
 
   const q = {
     tenantByCode: db.prepare("SELECT id, code, name FROM tenants WHERE code = ? AND status = 'active'"),
@@ -160,6 +171,19 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
         roles: q.roles.all(user.id), permissions: effectivePermissions(db, user.id) });
     },
 
+    'GET /api/notifications': (req, res, url) => {
+      const { user } = requireSession(req);
+      const filter = url.searchParams.get('filter') === 'unread' ? 'unread' : 'all';
+      const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit'), 10) || 50, 1), 100);
+      send(res, 200, listFor(db, user.id, { filter, limit }));
+    },
+
+    'POST /api/notifications/read-all': (req, res) => {
+      checkPost(req);
+      const { user } = requireSession(req);
+      send(res, 200, { updated: markAllRead(db, user.id) });
+    },
+
     'POST /api/auth/change-password': async (req, res) => {
       checkPost(req);
       const { user, sidHash } = requireSession(req);
@@ -195,6 +219,12 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
     try {
       const url = new URL(req.url, 'http://x');
       if (url.pathname.startsWith('/api/')) {
+        const m = req.method === 'POST' && url.pathname.match(/^\/api\/notifications\/(\d+)\/read$/);
+        if (m) {
+          checkPost(req);
+          const { user } = requireSession(req);
+          return send(res, 200, { updated: markRead(db, user.id, Number(m[1])) });
+        }
         const h = routes[`${req.method} ${url.pathname}`];
         if (!h) throw new HttpError(404, 'NOT_FOUND');
         return await h(req, res, url);
@@ -208,7 +238,7 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
     }
   });
 
-  return { server, db, seeded, close: () => { server.close(); db.close(); } };
+  return { server, db, seeded, notify: (n) => notify(db, n), close: () => { clearInterval(purgeTimer); server.close(); db.close(); } };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

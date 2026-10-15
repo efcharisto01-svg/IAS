@@ -16,6 +16,7 @@
 | 헤더게시판 (헤더 고정, 모든 칼럼 정렬: 오름→내림→원상복귀) | `.hboard` `.hboard-head` `.hboard-body` `.hboard-row` | `js/list.js` (`IAS.sortable`, `IAS.stickyShadow`) |
 | 모션 | `.rise` `.shake` `.spinner` | |
 | 로그인 확인·권한·로그아웃 | | `js/auth.js` (`IAS.auth.require`, `can`, `logout`) |
+| 상단 바 + 알림 (종, 안 읽음 숫자, 알림 패널) | `.topbar` `.ibtn` `.badge` `.avatar` `.notif-panel` `.notif-item` `.has-topbar` | `js/topbar.js` (`IAS.topbar.mount`) |
 
 ## 화면 계획
 - 홈: 위젯 그리드 + 앱 아이콘 그리드. 폰/태블릿 세로는 위아래, 태블릿 가로(`min-width: 900px` + landscape)는 좌우.
@@ -32,3 +33,8 @@
 - 권한 = 역할(role_grants) + 사용자별 예외(user_grants, `allow=0` 차단이 우선). `*`는 전체 허용.
 - 화면 표시는 `IAS.auth.can(me, 'app', id)`로 가리고, **실제 차단은 서버 API에서 반드시 다시 확인한다.**
 - 계정은 회사 관리자 등록, 엑셀 일괄 등록, SSO 세 가지를 지원할 계획 (아직 미구현).
+
+## 알림 규칙
+- 모든 로그인 후 화면은 `IAS.topbar.mount({ title, me })`로 상단 바를 쓴다. 종의 숫자는 안 읽은 알림 수, 패널은 "전체 N건 · 안 읽음 M건".
+- 알림 보내기는 서버 `notify(db, { tenantId, userId, app, source, title, body, link })` (`server/notifications.js`). `app`은 보낸 앱의 권한 id이고, 그 앱을 쓸 수 없는 사용자에게는 보이지도 세어지지도 않는다. `null`이면 시스템 알림. `link`는 같은 사이트의 `.html` 페이지만 허용.
+- 알림을 누르면 읽음 처리 후 `link` 화면으로 이동. 새 알림은 30초마다 서버에 확인(탭이 숨겨져 있으면 멈춤). 60일이 지난 알림은 서버가 자동 삭제(시작 시 + 6시간마다).
