@@ -4,7 +4,7 @@
  *   IAS.topbar.mount({ title: '홈', me });
  *
  * - Bell shows the number of unread notifications. The panel shows "전체 N건 · 안 읽음 M건".
- * - Click a notification: it is marked read and its page opens.
+ * - Click a notification: it is marked read and its page opens. Clicking outside the panel closes it.
  * - Device notifications (Web Push) are switched on in the panel; js/push.js and sw.js must be loaded/served.
  * - The server is asked every 30 seconds (paused while the tab is hidden). The server hides
  *   notifications from apps the user may not use and deletes the ones older than 60 days.
@@ -139,6 +139,9 @@
     scrim.addEventListener('click', () => setOpen(false));
     const onKey = (e) => { if (e.key === 'Escape' && panel.classList.contains('on')) { setOpen(false); bell.focus(); } };
     document.addEventListener('keydown', onKey);
+    // click anywhere outside the panel (and not on the bell itself) closes it
+    const onDown = (e) => { if (panel.classList.contains('on') && !panel.contains(e.target) && !bell.contains(e.target)) setOpen(false); };
+    document.addEventListener('pointerdown', onDown, true);
     [[tAll, 'all'], [tUn, 'unread']].forEach(([t, f]) => t.addEventListener('click', () => { filter = f; render(); }));
     allBtn.addEventListener('click', () => {
       data.items.forEach((n) => { n.read = true; }); data.unread = 0; render();
@@ -154,7 +157,7 @@
 
     return {
       refresh,
-      destroy() { destroyed = true; stop(); document.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', onVis); bar.remove(); scrim.remove(); panel.remove(); document.body.classList.remove('has-topbar'); },
+      destroy() { destroyed = true; stop(); document.removeEventListener('keydown', onKey); document.removeEventListener('pointerdown', onDown, true); document.removeEventListener('visibilitychange', onVis); bar.remove(); scrim.remove(); panel.remove(); document.body.classList.remove('has-topbar'); },
     };
   }
 
