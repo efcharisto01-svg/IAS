@@ -48,6 +48,12 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at INTEGER NOT NULL, read_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS notifications_user ON notifications(user_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS user_photos (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, mime TEXT NOT NULL, data BLOB NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS user_settings (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (user_id, key)
+);
 CREATE TABLE IF NOT EXISTS server_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 -- one row per browser/device that turned on device notifications (Web Push)
 CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -65,6 +71,9 @@ export function openDb(file) {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
+  // columns added after the first release (existing databases)
+  const have = new Set(db.prepare('PRAGMA table_info(users)').all().map((c) => c.name));
+  for (const col of ['phone', 'department', 'job_title']) if (!have.has(col)) db.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`);
   return db;
 }
 
@@ -80,7 +89,7 @@ export function seedDemo(db) {
   const insT = db.prepare('INSERT INTO tenants (code, name) VALUES (?, ?)');
   const insR = db.prepare('INSERT INTO roles (tenant_id, key, name) VALUES (?, ?, ?)');
   const insG = db.prepare('INSERT INTO role_grants (role_id, kind, resource) VALUES (?, ?, ?)');
-  const insU = db.prepare('INSERT INTO users (tenant_id, login_id, name, pw_hash, must_change_pw, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+  const insU = db.prepare('INSERT INTO users (tenant_id, login_id, name, pw_hash, must_change_pw, created_at, department, job_title, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
   const insUR = db.prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)');
   const pw = hashPassword(DEMO_PASSWORD);
   db.exec('BEGIN');
@@ -91,9 +100,9 @@ export function seedDemo(db) {
       const member = Number(insR.run(t, 'member', '일반 사용자').lastInsertRowid);
       insG.run(admin, 'app', '*'); insG.run(admin, 'widget', '*');
       if (code === 'acme' || code === 'daehan') {
-        const a = Number(insU.run(t, 'admin', '관리자', pw, 0, now()).lastInsertRowid); insUR.run(a, admin);
-        const k = Number(insU.run(t, 'kim', '김하늘', pw, 0, now()).lastInsertRowid); insUR.run(k, member);
-        const n = Number(insU.run(t, 'newbie', '신입', pw, 1, now()).lastInsertRowid); insUR.run(n, member);
+        const a = Number(insU.run(t, 'admin', '관리자', pw, 0, now(), '총무팀', '팀장', `admin@${code}.example`).lastInsertRowid); insUR.run(a, admin);
+        const k = Number(insU.run(t, 'kim', '김하늘', pw, 0, now(), '총무팀', '대리', `kim@${code}.example`).lastInsertRowid); insUR.run(k, member);
+        const n = Number(insU.run(t, 'newbie', '신입', pw, 1, now(), '총무팀', '사원', null).lastInsertRowid); insUR.run(n, member);
       }
     }
     db.exec('COMMIT');

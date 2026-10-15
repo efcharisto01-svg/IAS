@@ -1,4 +1,5 @@
 import { now, effectivePermissions, can } from './db.js';
+import { isMuted } from './profile.js';
 
 export const RETENTION_DAYS = 60;
 const hooks = new Set(); // called after a notification is stored (device push)
@@ -10,11 +11,13 @@ const LINK_RE = /^\/?[\w.-]+\.html(\?[\w=&%.\-]*)?(#[\w-]*)?$/; // same-site pag
  *   app    permission resource id of the sender (kind 'app'), or null for system notices.
  *          A user who cannot use that app never sees the notification.
  *   source label shown to the user ('게시판', '시스템' ...)
+ *   (returns null when the user turned off notifications for that app)
  *   link   page to open when the notification is clicked (e.g. 'post.html?id=3')
  */
 export function notify(db, { tenantId, userId, app = null, source, title, body = '', link = null, at = now() }) {
   if (!source || !title) throw new Error('notify: source and title are required');
   if (link !== null && !LINK_RE.test(link)) throw new Error('notify: link must be a same-site .html page');
+  if (app !== null && isMuted(db, userId, app)) return null; // the user turned this app's notifications off
   const r = db.prepare(`INSERT INTO notifications (tenant_id, user_id, app, source, title, body, link, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(tenantId, userId, app, String(source).slice(0, 20), String(title).slice(0, 120), String(body).slice(0, 200), link, at);
   const id = Number(r.lastInsertRowid);

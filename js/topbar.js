@@ -1,13 +1,14 @@
 /*
- * IAS shared top bar with notifications (css: .topbar, .ibtn, .badge, .notif-*)
+ * IAS shared top bar: title, notification bell, profile avatar (css: .topbar, .ibtn, .badge, .avatar, .notif-*)
  *   const me = await IAS.auth.require();
  *   IAS.topbar.mount({ title: '홈', me });
  *
- * - Bell shows the number of unread notifications. The panel shows "전체 N건 · 안 읽음 M건".
- * - Click a notification: it is marked read and its page opens. Clicking outside the panel closes it.
- * - Device notifications (Web Push) are switched on in the panel; js/push.js and sw.js must be loaded/served.
+ * - Bell: unread count badge. Panel: "전체 N건 · 안 읽음 M건". Clicking a notification marks it read and opens its page.
+ * - Avatar: opens the profile panel (js/profile.js): my info, photo, notification / screen settings, devices, logout.
+ * - Clicking anywhere outside an open panel closes it.
  * - The server is asked every 30 seconds (paused while the tab is hidden). The server hides
  *   notifications from apps the user may not use and deletes the ones older than 60 days.
+ * - Device notifications (Web Push) are switched on in the profile: 알림 설정. js/push.js and sw.js must be served.
  */
 (function (global) {
   const POLL_MS = 30000;
@@ -37,6 +38,7 @@
 
   function mount({ title = '', me } = {}) {
     document.body.classList.add('has-topbar');
+    if (me && me.settings && global.IAS.theme) global.IAS.theme.apply(me.settings.theme); // account theme wins over this device's cache
 
     const bar = el('header', 'topbar');
     bar.appendChild(el('div', 'topbar-title', title));
@@ -46,7 +48,8 @@
     bell.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>';
     const badge = el('span', 'badge', '0'); badge.hidden = true; bell.appendChild(badge);
     tools.appendChild(bell);
-    const avatar = el('div', 'avatar', me && me.user ? me.user.name.charAt(0) : ''); avatar.setAttribute('aria-label', me && me.user ? me.user.name : '내 정보');
+    const avatar = el('button', 'avatar'); avatar.type = 'button';
+    avatar.setAttribute('aria-label', '프로필'); avatar.setAttribute('aria-haspopup', 'dialog'); avatar.setAttribute('aria-expanded', 'false'); avatar.setAttribute('aria-controls', 'profilePanel');
     tools.appendChild(avatar);
     bar.appendChild(tools);
 
@@ -59,13 +62,15 @@
     const tAll = el('button', 'notif-tab'); const tUn = el('button', 'notif-tab');
     [tAll, tUn].forEach((t) => { t.type = 'button'; tabs.appendChild(t); });
     const list = el('div', 'notif-list');
-    const pushRow = el('div', 'notif-push'); const pushText = el('div', 'notif-push-text'); const pushBtn = el('button', 'notif-push-btn'); pushBtn.type = 'button';
-    pushRow.append(pushText, pushBtn);
     const foot = el('div', 'notif-foot', '최근 60일 알림만 보관됩니다');
-    [head, tabs, list, pushRow, foot].forEach((n) => panel.appendChild(n));
+    [head, tabs, list, foot].forEach((n) => panel.appendChild(n));
     document.body.append(bar, scrim, panel);
 
     let data = { total: 0, unread: 0, items: [] }, filter = 'all', loaded = false, timer = null, destroyed = false;
+
+    // profile panel (photo, my info, settings, devices, logout)
+    const profile = me && global.IAS.profile ? global.IAS.profile.attach({ me, button: avatar, scrim }) : null;
+    if (!profile) avatar.textContent = me && me.user ? me.user.name.charAt(0) : '';
 
     function render() {
       const { total, unread, items } = data;
@@ -90,28 +95,6 @@
       });
     }
 
-    // device notifications (browser / OS decide how long they stay on screen)
-    const PUSH_TEXT = {
-      on: ['컴퓨터·휴대폰 알림 켜짐', '끄기'], off: ['컴퓨터·휴대폰 알림 꺼짐', '켜기'],
-      denied: ['브라우저 설정에서 이 사이트의 알림을 허용해 주세요', null],
-      insecure: ['보안 연결(HTTPS)에서만 기기 알림을 쓸 수 있습니다', null],
-      'ios-install': ['아이폰은 홈 화면에 추가한 뒤 기기 알림을 받을 수 있습니다', null],
-      unsupported: ['이 브라우저는 기기 알림을 지원하지 않습니다', null],
-    };
-    let pushState = 'unsupported';
-    async function renderPush(s) {
-      pushState = s || (global.IAS.push ? await global.IAS.push.state() : 'unsupported');
-      const [text, btn] = PUSH_TEXT[pushState];
-      pushText.textContent = text; pushBtn.hidden = !btn; if (btn) pushBtn.textContent = btn;
-      pushRow.title = '알림이 화면에 떠 있는 시간은 브라우저와 기기 설정을 따릅니다';
-    }
-    pushBtn.addEventListener('click', async () => {
-      pushBtn.disabled = true;
-      try { await renderPush(pushState === 'on' ? await global.IAS.push.disable() : await global.IAS.push.enable()); }
-      catch (_) { await renderPush(); }
-      pushBtn.disabled = false;
-    });
-
     function open_(n) {
       if (!n.read) { n.read = true; data.unread = Math.max(0, data.unread - 1); post(`/api/notifications/${n.id}/read`).catch(() => {}); }
       render();
@@ -133,10 +116,10 @@
 
     function setOpen(on) {
       panel.classList.toggle('on', on); scrim.classList.toggle('on', on); bell.setAttribute('aria-expanded', String(on));
-      if (on) { refresh(); renderPush(); }
+      if (on) refresh();
     }
     bell.addEventListener('click', () => setOpen(!panel.classList.contains('on')));
-    scrim.addEventListener('click', () => setOpen(false));
+    scrim.addEventListener('click', () => { setOpen(false); if (profile) profile.close(); });
     const onKey = (e) => { if (e.key === 'Escape' && panel.classList.contains('on')) { setOpen(false); bell.focus(); } };
     document.addEventListener('keydown', onKey);
     // click anywhere outside the panel (and not on the bell itself) closes it
@@ -153,11 +136,14 @@
     const onVis = () => { if (document.hidden) stop(); else { refresh(); start(); } };
     document.addEventListener('visibilitychange', onVis);
     render(); refresh(); if (!document.hidden) start();
-    if (global.IAS.push) { global.IAS.push.register().then(() => { global.IAS.push.sync(); renderPush(); }); global.IAS.push.onMessage(refresh); }
+    if (global.IAS.push) { global.IAS.push.register().then(() => global.IAS.push.sync()); global.IAS.push.onMessage(refresh); }
 
     return {
       refresh,
-      destroy() { destroyed = true; stop(); document.removeEventListener('keydown', onKey); document.removeEventListener('pointerdown', onDown, true); document.removeEventListener('visibilitychange', onVis); bar.remove(); scrim.remove(); panel.remove(); document.body.classList.remove('has-topbar'); },
+      destroy() {
+        destroyed = true; stop(); document.removeEventListener('keydown', onKey); document.removeEventListener('pointerdown', onDown, true); document.removeEventListener('visibilitychange', onVis);
+        if (profile) profile.destroy(); bar.remove(); scrim.remove(); panel.remove(); document.body.classList.remove('has-topbar');
+      },
     };
   }
 

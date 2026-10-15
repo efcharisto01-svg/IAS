@@ -6,6 +6,8 @@ import { openDb, now, seedDemo, effectivePermissions, DEMO_PASSWORD } from './db
 import { listFor, markRead, markAllRead, purgeOld, notify, onNotify } from './notifications.js';
 import { loadVapid, sendPush, validSubscription } from './push.js';
 import { can } from './db.js';
+import { profileOf, updateContact, photoMime, savePhoto, getPhoto, deletePhoto, getSettings, updateSettings, uaLabel, PHOTO_MAX } from './profile.js';
+import { appsFor } from './apps.js';
 import { hashPassword, verifyPassword, DUMMY_HASH, newToken, sha256, parseCookies, cookie, passwordProblem } from './security.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -61,6 +63,9 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
     session: db.prepare('SELECT * FROM sessions WHERE id_hash = ?'),
     delSession: db.prepare('DELETE FROM sessions WHERE id_hash = ?'),
     delOther: db.prepare('DELETE FROM sessions WHERE user_id = ? AND id_hash != ?'),
+    mySessions: db.prepare('SELECT rowid AS id, id_hash, ua, created_at FROM sessions WHERE user_id = ? AND expires_at >= ? ORDER BY created_at DESC, rowid DESC'),
+    delSessionById: db.prepare('DELETE FROM sessions WHERE rowid = ? AND user_id = ? AND id_hash != ?'),
+    photoUser: db.prepare('SELECT id FROM users WHERE id = ? AND tenant_id = ?'),
     purge: db.prepare('DELETE FROM sessions WHERE expires_at < ?'),
     tenantById: db.prepare('SELECT id, code, name FROM tenants WHERE id = ?'),
     setPw: db.prepare('UPDATE users SET pw_hash = ?, must_change_pw = 0 WHERE id = ?'),
@@ -112,6 +117,28 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       const proto = isSecure(req) ? 'https' : 'http';
       if (origin !== `${proto}://${req.headers.host}`) throw new HttpError(403, 'BAD_ORIGIN');
     }
+  }
+
+  function readBuffer(req, max) {
+    return new Promise((resolve, reject) => {
+      let size = 0, tooBig = false; const chunks = [];
+      req.on('data', (c) => { size += c.length; if (size > max) tooBig = true; else chunks.push(c); });
+      req.on('end', () => (tooBig ? reject(new HttpError(413, 'TOO_LARGE')) : resolve(Buffer.concat(chunks))));
+      req.on('error', reject);
+    });
+  }
+  function checkImage(req) { // raw image upload: same-origin only, image content types only
+    if (!/^image\/(jpeg|png|webp)(;|$)/.test(req.headers['content-type'] || '')) throw new HttpError(415, 'IMAGE_REQUIRED');
+    const origin = req.headers.origin;
+    if (origin && origin !== `${isSecure(req) ? 'https' : 'http'}://${req.headers.host}`) throw new HttpError(403, 'BAD_ORIGIN');
+  }
+  function sendPhoto(req, res, userId) {
+    const p = getPhoto(db, userId);
+    if (!p) throw new HttpError(404, 'NO_PHOTO');
+    const etag = `"${p.updated_at}-${p.data.length}"`;
+    const headers = { 'Content-Type': p.mime, 'Cache-Control': 'private, no-cache', ETag: etag, 'Content-Security-Policy': "default-src 'none'; sandbox" };
+    if (req.headers['if-none-match'] === etag) return send(res, 304, '', headers);
+    send(res, 200, Buffer.from(p.data), headers);
   }
 
   function currentSession(req) {
@@ -189,8 +216,58 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
 
     'GET /api/auth/me': (req, res) => {
       const { user } = requireSession(req);
-      send(res, 200, { user: publicUser(user), mustChangePassword: !!user.must_change_pw,
-        roles: q.roles.all(user.id), permissions: effectivePermissions(db, user.id) });
+      const permissions = effectivePermissions(db, user.id);
+      send(res, 200, { user: profileOf(db, user, q.tenantById.get(user.tenant_id)), mustChangePassword: !!user.must_change_pw,
+        roles: q.roles.all(user.id), permissions, settings: getSettings(db, user.id), apps: appsFor(permissions) });
+    },
+
+    'PUT /api/me/profile': async (req, res) => {
+      checkPost(req);
+      const { user } = requireSession(req);
+      const err = updateContact(db, user.id, await readJson(req));
+      if (err) throw new HttpError(400, err);
+      audit('profile_updated', { tenantId: user.tenant_id, userId: user.id, ip: clientIp(req) });
+      send(res, 200, profileOf(db, q.userById.get(user.id), q.tenantById.get(user.tenant_id)));
+    },
+
+    'GET /api/me/settings': (req, res) => { const { user } = requireSession(req); send(res, 200, getSettings(db, user.id)); },
+
+    'PUT /api/me/settings': async (req, res) => {
+      checkPost(req);
+      const { user } = requireSession(req);
+      const err = updateSettings(db, user.id, await readJson(req));
+      if (err) throw new HttpError(400, err);
+      send(res, 200, getSettings(db, user.id));
+    },
+
+    'GET /api/me/photo': (req, res) => { const { user } = requireSession(req); sendPhoto(req, res, user.id); },
+
+    'POST /api/me/photo': async (req, res) => {
+      checkImage(req);
+      const { user } = requireSession(req);
+      const buf = await readBuffer(req, PHOTO_MAX);
+      const mime = photoMime(buf);
+      if (!mime || mime !== req.headers['content-type'].split(';')[0]) throw new HttpError(400, 'INVALID_IMAGE');
+      savePhoto(db, user.id, mime, buf);
+      send(res, 200, profileOf(db, user, q.tenantById.get(user.tenant_id)));
+    },
+
+    'POST /api/me/photo/delete': (req, res) => {
+      checkPost(req);
+      const { user } = requireSession(req);
+      deletePhoto(db, user.id);
+      send(res, 200, profileOf(db, user, q.tenantById.get(user.tenant_id)));
+    },
+
+    'GET /api/me/sessions': (req, res) => {
+      const { user, sidHash } = requireSession(req);
+      send(res, 200, q.mySessions.all(user.id, now()).map((s) => ({ id: Number(s.id), device: uaLabel(s.ua), createdAt: s.created_at, current: s.id_hash === sidHash })));
+    },
+
+    'POST /api/me/sessions/logout-others': (req, res) => {
+      checkPost(req);
+      const { user, sidHash } = requireSession(req);
+      send(res, 200, { removed: Number(q.delOther.run(user.id, sidHash).changes) });
     },
 
     'GET /api/notifications': (req, res, url) => {
@@ -261,11 +338,23 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
     try {
       const url = new URL(req.url, 'http://x');
       if (url.pathname.startsWith('/api/')) {
-        const m = req.method === 'POST' && url.pathname.match(/^\/api\/notifications\/(\d+)\/read$/);
+        let m = req.method === 'POST' && url.pathname.match(/^\/api\/notifications\/(\d+)\/read$/);
         if (m) {
           checkPost(req);
           const { user } = requireSession(req);
           return send(res, 200, { updated: markRead(db, user.id, Number(m[1])) });
+        }
+        m = req.method === 'POST' && url.pathname.match(/^\/api\/me\/sessions\/(\d+)\/logout$/);
+        if (m) {
+          checkPost(req);
+          const { user, sidHash } = requireSession(req);
+          return send(res, 200, { removed: Number(q.delSessionById.run(Number(m[1]), user.id, sidHash).changes) });
+        }
+        m = req.method === 'GET' && url.pathname.match(/^\/api\/users\/(\d+)\/photo$/);
+        if (m) { // co-workers' photos: same company only
+          const { user } = requireSession(req);
+          if (!q.photoUser.get(Number(m[1]), user.tenant_id)) throw new HttpError(404, 'NO_PHOTO');
+          return sendPhoto(req, res, Number(m[1]));
         }
         const h = routes[`${req.method} ${url.pathname}`];
         if (!h) throw new HttpError(404, 'NOT_FOUND');

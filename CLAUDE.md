@@ -16,8 +16,10 @@
 | 헤더게시판 (헤더 고정, 모든 칼럼 정렬: 오름→내림→원상복귀) | `.hboard` `.hboard-head` `.hboard-body` `.hboard-row` | `js/list.js` (`IAS.sortable`, `IAS.stickyShadow`) |
 | 모션 | `.rise` `.shake` `.spinner` | |
 | 로그인 확인·권한·로그아웃 | | `js/auth.js` (`IAS.auth.require`, `can`, `logout`) |
-| 기기 알림 (Web Push, 서비스 워커) | `.notif-push` (패널 안 켜기/끄기 줄) | `js/push.js` (`IAS.push`), `sw.js` |
-| 상단 바 + 알림 (종, 안 읽음 숫자, 알림 패널) | `.topbar` `.ibtn` `.badge` `.avatar` `.notif-panel` `.notif-item` `.has-topbar` | `js/topbar.js` (`IAS.topbar.mount`) |
+| 기기 알림 (Web Push, 서비스 워커) | (프로필 > 알림 설정의 스위치) | `js/push.js` (`IAS.push`), `sw.js` |
+| 프로필 패널 (사진, 내 정보, 알림·화면 설정, 로그인한 기기, 로그아웃) | `.profile-panel` `.pview` `.me-card` `.me-photo` `.menu-group` `.menu-row` `.switch` `.segmented` `.pf-field` `.dev-row` `.toast` | `js/profile.js` (`IAS.profile.attach`, 상단 바가 자동으로 붙임) |
+| 테마 (시스템·라이트·다크, `<head>`에서 먼저 로드) | `html[data-theme]` | `js/theme.js` (`IAS.theme`) |
+| 상단 바 + 알림 (종, 안 읽음 숫자, 알림 패널, 프로필 사진 버튼) | `.topbar` `.ibtn` `.badge` `.avatar` `.notif-panel` `.notif-item` `.has-topbar` | `js/topbar.js` (`IAS.topbar.mount`) |
 
 ## 화면 계획
 - 홈: 위젯 그리드 + 앱 아이콘 그리드. 폰/태블릿 세로는 위아래, 태블릿 가로(`min-width: 900px` + landscape)는 좌우.
@@ -39,7 +41,14 @@
 - 모든 로그인 후 화면은 `IAS.topbar.mount({ title, me })`로 상단 바를 쓴다. 종의 숫자는 안 읽은 알림 수, 패널은 "전체 N건 · 안 읽음 M건".
 - 알림 보내기는 서버 `notify(db, { tenantId, userId, app, source, title, body, link })` (`server/notifications.js`). `app`은 보낸 앱의 권한 id이고, 그 앱을 쓸 수 없는 사용자에게는 보이지도 세어지지도 않는다. `null`이면 시스템 알림. `link`는 같은 사이트의 `.html` 페이지만 허용.
 - 알림을 누르면 읽음 처리 후 `link` 화면으로 이동. 새 알림은 30초마다 서버에 확인(탭이 숨겨져 있으면 멈춤). 60일이 지난 알림은 서버가 자동 삭제(시작 시 + 6시간마다).
-- 기기 알림(Web Push): 알림 패널에서 사용자가 기기마다 켠다. `notify()`가 저장한 알림은 그 사용자의 켜 둔 기기에도 암호화해서 보낸다(권한 없는 앱의 알림은 보내지 않음). 화면이 떠 있고 포커스가 있으면 기기 알림 대신 종만 갱신한다.
+- 기기 알림(Web Push): 프로필 > 알림 설정에서 사용자가 기기마다 켠다. `notify()`가 저장한 알림은 그 사용자의 켜 둔 기기에도 암호화해서 보낸다(권한 없는 앱의 알림은 보내지 않음). 화면이 떠 있고 포커스가 있으면 기기 알림 대신 종만 갱신한다.
 - 알림이 화면에 떠 있는 시간(예: 30초)은 우리가 정하지 않고 **브라우저와 OS 설정을 따른다.** 개인별 초 설정 화면은 만들지 않는다.
 - 로그아웃하면 그 기기의 기기 알림 구독을 해제한다(공용 컴퓨터 보호). 같은 브라우저를 다른 사용자가 켜면 구독이 그 사용자로 옮겨진다.
 - 운영: 기기 알림은 HTTPS에서만 동작(개발은 localhost 가능). `IAS_PUSH_SUBJECT=mailto:담당자메일`을 설정하고, VAPID 키(DB `server_settings`)를 바꾸면 모든 기기가 다시 켜야 하므로 DB 백업에 포함한다. 아이폰은 홈 화면에 추가한 뒤에만 가능.
+
+## 프로필·개인 설정 규칙
+- 모든 로그인 후 화면은 `<head>`에 `js/theme.js`를 넣어 깜빡임 없이 테마를 적용한다(시스템/라이트/다크, 계정에 저장).
+- 본인이 고치는 정보는 이메일과 전화번호뿐. 이름·부서·직책은 회사 관리자가 관리한다(서버가 무시함).
+- 프로필 사진: 브라우저가 512px 정사각 JPEG로 줄여 올리고, 서버는 JPEG/PNG/WebP 형식과 1MB 이하만 DB에 저장. 같은 회사 사람의 사진만 `/api/users/:id/photo`로 볼 수 있다.
+- 앱별 알림 끄기: 서버 `server/apps.js`의 `registerApp({ id, name })`로 앱을 등록하면 프로필 > 알림 설정에 자동으로 나타난다. 꺼 둔 앱의 알림은 만들어지지 않는다(`notify()`가 `null` 반환). 시스템 알림은 끌 수 없다.
+- 로그인한 기기: `/api/me/sessions`로 목록, 기기별 로그아웃, 다른 모든 기기 로그아웃(현재 기기는 항상 유지).
