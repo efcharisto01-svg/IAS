@@ -23,8 +23,8 @@ const uid = (l, code = 'acme') => app.db.prepare('SELECT u.id FROM users u JOIN 
 
 test('registry: 로그기록 app and its widget exist; ids and links are validated', () => {
   const admin = catalogFor(effectivePermissions(app.db, uid('admin')));
-  assert.deepEqual(admin.apps.map((a) => a.id), ['audit']); assert.equal(admin.apps[0].name, '로그기록'); assert.equal(admin.apps[0].link, 'log.html');
-  assert.deepEqual(admin.widgets.map((w) => w.id), ['audit.recent']); assert.equal(admin.widgets[0].script, 'js/widgets/audit-recent.js');
+  assert.deepEqual(admin.apps.map((a) => a.id), ['audit', 'board']); assert.equal(admin.apps[0].name, '로그기록'); assert.equal(admin.apps[0].link, 'log.html');
+  assert.deepEqual(admin.widgets.map((w) => w.id), ['audit.recent', 'board.recent']); assert.equal(admin.widgets[0].script, 'js/widgets/audit-recent.js');
   const kim = catalogFor(effectivePermissions(app.db, uid('kim')));
   assert.deepEqual(kim, { apps: [], widgets: [] }, 'no grants: nothing on the home screen');
   assert.throws(() => registerApp({ id: 'bad id', name: 'x' }), /id and name/);
@@ -36,9 +36,9 @@ test('registry: 로그기록 app and its widget exist; ids and links are validat
 test('/me carries the catalog; the default layout shows everything the user may use', async () => {
   const c = await login('admin');
   const me = await (await api('/api/auth/me', { cookie: c })).json();
-  assert.deepEqual(me.catalog.apps.map((a) => a.id), ['audit']);
+  assert.deepEqual(me.catalog.apps.map((a) => a.id), ['audit', 'board']);
   const r = await (await api('/api/me/layout', { cookie: c })).json();
-  assert.equal(r.layout.saved, false); assert.deepEqual(r.layout.apps, ['audit']); assert.deepEqual(r.layout.widgets, ['audit.recent']);
+  assert.equal(r.layout.saved, false); assert.deepEqual(r.layout.apps, ['audit', 'board']); assert.deepEqual(r.layout.widgets, ['audit.recent', 'board.recent']);
   const k = await (await api('/api/me/layout', { cookie: await login('kim') })).json();
   assert.deepEqual(k.layout.apps, []); assert.deepEqual(k.layout.widgets, []);
   assert.equal((await api('/api/me/layout')).status, 401);
@@ -51,7 +51,7 @@ test('saving: validation, normalisation, and what is saved is filtered by permis
   assert.equal((await api('/api/me/layout', { method: 'PUT', cookie: c, json: { widgets: [], apps: Array(201).fill('a'), hidden: [] } })).status, 400);
   // an app the user has no permission for is dropped; a folder with one usable app dissolves
   const r = await (await api('/api/me/layout', { method: 'PUT', cookie: c, json: { widgets: ['audit.recent', 'nope.widget', 'audit.recent'], apps: [{ folder: true, id: 'f1', name: '  ', apps: ['audit', 'secret'] }, 'secret2'], hidden: ['secret3'], split: { l: 5 } } })).json();
-  assert.deepEqual(r.layout.widgets, ['audit.recent']); assert.deepEqual(r.layout.apps, ['audit']); assert.deepEqual(r.layout.hidden, []); assert.equal(r.layout.split.l, 0.88, 'split is clamped');
+  assert.deepEqual(r.layout.widgets, ['audit.recent']); assert.deepEqual(r.layout.apps, ['audit', 'board']); assert.deepEqual(r.layout.hidden, []); assert.equal(r.layout.split.l, 0.88, 'split is clamped');
   assert.equal(r.layout.saved, true);
 });
 
@@ -61,11 +61,11 @@ test('a block (user_grants allow=0) removes the app and widget even from a saved
   app.db.prepare("INSERT INTO user_grants (user_id, kind, resource, allow) VALUES (?, 'app', 'audit', 0)").run(a);
   app.db.prepare("INSERT INTO user_grants (user_id, kind, resource, allow) VALUES (?, 'widget', 'audit.recent', 0)").run(a);
   let r = await (await api('/api/me/layout', { cookie: c })).json();
-  assert.deepEqual(r.layout.apps, []); assert.deepEqual(r.layout.widgets, []); assert.deepEqual(r.catalog, { apps: [], widgets: [] });
+  assert.deepEqual(r.layout.apps, ['board']); assert.deepEqual(r.layout.widgets, []); assert.deepEqual(r.catalog.apps.map((x) => x.id), ['board']);
   assert.equal((await api('/api/admin/changes', { cookie: c })).status, 403, 'and the server itself refuses the log');
   app.db.prepare("DELETE FROM user_grants WHERE user_id = ?").run(a);
   r = await (await api('/api/me/layout', { cookie: c })).json();
-  assert.deepEqual(r.layout.apps, ['audit']); assert.equal(r.layout.split.l, 0.5, 'saved arrangement comes back');
+  assert.deepEqual(r.layout.apps, ['audit', 'board']); assert.equal(r.layout.split.l, 0.5, 'saved arrangement comes back');
 });
 
 test('new apps appear at the end, hidden apps stay hidden, new widgets are not added by themselves; reset restores the default', async () => {
@@ -74,12 +74,12 @@ test('new apps appear at the end, hidden apps stay hidden, new widgets are not a
   registerWidget({ id: 'newapp.w', name: '새 위젯', size: 'small', script: 'js/widgets/newapp.js', app: 'newapp' });
   await api('/api/me/layout', { method: 'PUT', cookie: c, json: { widgets: ['audit.recent'], apps: ['audit'], hidden: [], split: { l: 0.6 } } });
   let r = await (await api('/api/me/layout', { cookie: c })).json();
-  assert.deepEqual(r.layout.apps, ['audit', 'newapp']); assert.deepEqual(r.layout.widgets, ['audit.recent']); assert.ok(r.catalog.widgets.some((w) => w.id === 'newapp.w'), 'offered in 위젯 추가');
+  assert.deepEqual(r.layout.apps, ['audit', 'board', 'newapp']); assert.deepEqual(r.layout.widgets, ['audit.recent']); assert.ok(r.catalog.widgets.some((w) => w.id === 'newapp.w'), 'offered in 위젯 추가');
   await api('/api/me/layout', { method: 'PUT', cookie: c, json: { widgets: [], apps: ['audit'], hidden: ['newapp'], split: { l: 0.6 } } });
   r = await (await api('/api/me/layout', { cookie: c })).json();
-  assert.deepEqual(r.layout.apps, ['audit']); assert.deepEqual(r.layout.hidden, ['newapp']);
+  assert.deepEqual(r.layout.apps, ['audit', 'board']); assert.deepEqual(r.layout.hidden, ['newapp']);
   r = await (await api('/api/me/layout/reset', { method: 'POST', cookie: c, json: {} })).json();
-  assert.equal(r.layout.saved, false); assert.deepEqual(r.layout.apps, ['audit', 'newapp']);
+  assert.equal(r.layout.saved, false); assert.deepEqual(r.layout.apps, ['audit', 'board', 'newapp']);
 });
 
 test('cleanLayout is strict about folders and numbers', () => {

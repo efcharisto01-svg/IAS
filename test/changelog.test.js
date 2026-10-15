@@ -102,8 +102,8 @@ test('every table and every column is decided and has a Korean name (nothing is 
     for (const c of cols) assert.ok(c in spec.columns || c in (spec.ignore || {}), `${spec.table}.${c} has no Korean name`);
     for (const [c, label] of Object.entries(spec.columns)) assert.ok(/[가-힣]/.test(label), `${spec.table}.${c}: Korean name`);
   }
-  const db = openDb(':memory:'); db.exec('CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT)');
-  assert.throws(() => installChangeLog(db), /decide for table\(s\) posts/, 'a new table must be decided');
+  const db = openDb(':memory:'); db.exec('CREATE TABLE memos (id INTEGER PRIMARY KEY, title TEXT)');
+  assert.throws(() => installChangeLog(db), /decide for table\(s\) memos/, 'a new table must be decided');
   const db2 = openDb(':memory:'); db2.exec('ALTER TABLE users ADD COLUMN nickname TEXT');
   assert.throws(() => installChangeLog(db2), /no Korean name for column\(s\) nickname/, 'a new column needs a Korean name');
 });

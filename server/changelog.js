@@ -26,6 +26,12 @@ export const TRACKED = [
   { table: 'role_grants', label: '역할 권한', rowId: "{r}.role_id || ':' || {r}.kind || ':' || {r}.resource", tenant: '(SELECT tenant_id FROM roles WHERE id = {r}.role_id)', columns: { role_id: '역할 번호', kind: '권한 종류', resource: '권한 항목' } },
   { table: 'user_grants', label: '사용자별 권한', rowId: "{r}.user_id || ':' || {r}.kind || ':' || {r}.resource", tenant: '(SELECT tenant_id FROM users WHERE id = {r}.user_id)', columns: { user_id: '사용자 번호', kind: '권한 종류', resource: '권한 항목', allow: '허용(1)/차단(0)' } },
   { table: 'user_settings', label: '개인 설정', rowId: "{r}.user_id || ':' || {r}.key", tenant: '(SELECT tenant_id FROM users WHERE id = {r}.user_id)', columns: { user_id: '사용자 번호', key: '설정 이름', value: '설정 값' } },
+  { table: 'boards', label: '게시판', rowId: 'id', tenant: '{r}.tenant_id', columns: { id: '게시판 번호', tenant_id: '회사 번호', name: '게시판 이름', sort_order: '게시판 순서', status: '게시판 상태', created_at: '게시판 만든 일시' } },
+  { table: 'board_categories', label: '게시판 분류', rowId: 'id', tenant: '(SELECT tenant_id FROM boards WHERE id = {r}.board_id)', columns: { id: '분류 번호', board_id: '게시판 번호', name: '분류 이름', sort_order: '분류 순서' } },
+  { table: 'posts', label: '게시글', rowId: 'id', tenant: '{r}.tenant_id', ignore: { views: '조회 수는 잦게 바뀌어 제외' },
+    columns: { id: '글 번호', tenant_id: '회사 번호', board_id: '게시판 번호', category_id: '분류 번호', title: '제목', body: '내용', author_id: '작성자 번호', pinned: '상단 고정', required: '필독', status: '글 상태', created_at: '작성일시', updated_at: '수정일시' } },
+  { table: 'comments', label: '댓글', rowId: 'id', tenant: '{r}.tenant_id', columns: { id: '댓글 번호', tenant_id: '회사 번호', post_id: '글 번호', author_id: '작성자 번호', body: '댓글 내용', status: '댓글 상태', created_at: '작성일시' } },
+  { table: 'board_files', label: '게시판 파일', rowId: 'id', tenant: '{r}.tenant_id', columns: { id: '파일 번호', tenant_id: '회사 번호', uploader_id: '올린 사람 번호', post_id: '글 번호', kind: '파일 종류', name: '파일 이름', mime: '파일 형식', size: '파일 크기', data: '파일 내용', created_at: '올린 일시' } },
   { table: 'user_photos', label: '프로필 사진', rowId: 'user_id', tenant: '(SELECT tenant_id FROM users WHERE id = {r}.user_id)', columns: { user_id: '사용자 번호', mime: '사진 형식', data: '사진 파일', updated_at: '사진 변경일시' } },
 ];
 
@@ -34,6 +40,7 @@ export const UNTRACKED = {
   sessions: '로그인 세션: 로그인한 기기 목록과 로그인 기록으로 확인',
   push_subscriptions: '기기 알림 구독(키 값): 로그인 기록에 켜기/끄기가 남음',
   notifications: '알림 본문과 읽음 표시: 양이 많고 변경 의미가 없음',
+  post_reads: '글 읽음 표시: 양이 많고 변경 의미가 없음',
   user_layouts: '홈 화면 배치(위젯·앱 순서, 폴더): 끌 때마다 바뀌는 개인 화면 설정',
   audit_log: '로그인·보안 기록 자체', change_log: '변경 기록 자체', audit_ctx: '작성자 전달용 내부 표', server_settings: '서버 내부 설정(키)',
 };

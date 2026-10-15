@@ -9,6 +9,7 @@ import { can } from './db.js';
 import { profileOf, updateContact, photoMime, savePhoto, getPhoto, deletePhoto, getSettings, updateSettings, uaLabel, PHOTO_MAX } from './profile.js';
 import { appsFor, catalogFor } from './apps.js';
 import './modules.js';
+import { createBoardApi, BoardError, LIMITS as BOARD_LIMITS, hasApp as hasBoardApp, isManager as isBoardManager } from './board.js';
 import { cleanLayout, saveLayout, resetLayout, layoutFor } from './layout.js';
 import { asUser, searchChanges, changesToCsv, purgeChanges } from './changelog.js';
 import { record, runWithContext, search as auditSearch, toCsv, purgeExpired, maskEmail, maskPhone, CATEGORIES } from './audit.js';
@@ -51,8 +52,9 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       pending.add(job);
     }
   });
-  purgeOld(db); purgeExpired(db); purgeChanges(db);
-  const purgeTimer = setInterval(() => { try { purgeOld(db); purgeExpired(db); purgeChanges(db); } catch (e) { console.error(e); } }, 6 * 3600 * 1000);
+  const board = createBoardApi(db);
+  purgeOld(db); purgeExpired(db); purgeChanges(db); board.purgeOrphans();
+  const purgeTimer = setInterval(() => { try { purgeOld(db); purgeExpired(db); purgeChanges(db); board.purgeOrphans(); } catch (e) { console.error(e); } }, 6 * 3600 * 1000);
   purgeTimer.unref();
 
   const q = {
@@ -102,10 +104,10 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
     res.end(isObj ? JSON.stringify(body) : body);
   }
 
-  function readJson(req) {
+  function readJson(req, max = 10240) {
     return new Promise((resolve, reject) => {
       let size = 0, tooBig = false; const chunks = [];
-      req.on('data', (c) => { size += c.length; if (size > 10240) tooBig = true; else chunks.push(c); });
+      req.on('data', (c) => { size += c.length; if (size > max) tooBig = true; else chunks.push(c); });
       req.on('end', () => {
         if (tooBig) return reject(new HttpError(413, 'TOO_LARGE'));
         try { resolve(JSON.parse(Buffer.concat(chunks).toString() || '{}')); } catch { reject(new HttpError(400, 'BAD_JSON')); }
@@ -115,8 +117,8 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
   }
 
   // CSRF: SameSite=Lax cookie + JSON content type + same-origin Origin header
-  function checkPost(req) {
-    if (!(req.headers['content-type'] || '').startsWith('application/json')) throw new HttpError(415, 'JSON_REQUIRED');
+  function checkPost(req, noBody = false) {
+    if (!noBody && !(req.headers['content-type'] || '').startsWith('application/json')) throw new HttpError(415, 'JSON_REQUIRED');
     const origin = req.headers.origin;
     if (origin) {
       const proto = isSecure(req) ? 'https' : 'http';
@@ -172,6 +174,74 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
   function publicUser(user) {
     const tenant = q.tenantById.get(user.tenant_id);
     return { id: user.id, loginId: user.login_id, name: user.name, tenant: { code: tenant.code, name: tenant.name } };
+  }
+
+  /** 게시판: needs the 'board' app permission; every action is checked again per board inside server/board.js. */
+  function requireBoard(req, manage = false) {
+    const cur = requireSession(req);
+    const perms = effectivePermissions(db, cur.user.id);
+    if (!hasBoardApp(perms) || (manage && !isBoardManager(perms))) throw new HttpError(403, 'FORBIDDEN');
+    return { ...cur, perms };
+  }
+  const boardCall = (fn) => { try { return fn(); } catch (e) { if (e instanceof BoardError) throw new HttpError(e.status, e.code, e.extra); throw e; } };
+  const intParam = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : 0; };
+
+  async function boardRoute(req, res, url) {
+    const path = url.pathname, method = req.method;
+    if (!path.startsWith('/api/board/')) return false;
+    let m;
+    if (method === 'GET' && path === '/api/board/boards') { const { user, perms } = requireBoard(req); send(res, 200, { boards: board.listBoards(user, perms), canManage: isBoardManager(perms) }); return true; }
+    if (method === 'GET' && path === '/api/board/posts') {
+      const { user, perms } = requireBoard(req); const p = url.searchParams;
+      send(res, 200, boardCall(() => board.listPosts(user, perms, { boardId: intParam(p.get('board')), categoryId: intParam(p.get('category')), q: p.get('q'), before: intParam(p.get('before')), limit: p.get('limit') })));
+      return true;
+    }
+    if (method === 'GET' && path === '/api/board/recent') { const { user, perms } = requireBoard(req); send(res, 200, board.recent(user, perms)); return true; }
+    if (method === 'POST' && path === '/api/board/posts') {
+      checkPost(req); const { user, perms } = requireBoard(req); const b = await readJson(req, 60000);
+      send(res, 200, { id: boardCall(() => board.createPost(user, perms, b)) }); return true;
+    }
+    if ((m = path.match(/^\/api\/board\/posts\/(\d+)$/))) {
+      const id = Number(m[1]);
+      if (method === 'GET') { const { user, perms } = requireBoard(req); send(res, 200, boardCall(() => board.getPost(user, perms, id))); return true; }
+      if (method === 'POST') { checkPost(req); const { user, perms } = requireBoard(req); const b = await readJson(req, 60000); send(res, 200, { id: boardCall(() => board.updatePost(user, perms, id, b)) }); return true; }
+      if (method === 'DELETE') { checkPost(req, true); const { user, perms } = requireBoard(req); boardCall(() => board.deletePost(user, perms, id)); send(res, 200, { ok: true }); return true; }
+    }
+    if (method === 'POST' && (m = path.match(/^\/api\/board\/posts\/(\d+)\/comments$/))) {
+      checkPost(req); const { user, perms } = requireBoard(req); const b = await readJson(req);
+      send(res, 200, { id: boardCall(() => board.addComment(user, perms, Number(m[1]), b)) }); return true;
+    }
+    if (method === 'DELETE' && (m = path.match(/^\/api\/board\/comments\/(\d+)$/))) {
+      checkPost(req, true); const { user, perms } = requireBoard(req); boardCall(() => board.deleteComment(user, perms, Number(m[1]))); send(res, 200, { ok: true }); return true;
+    }
+    if (method === 'POST' && path === '/api/board/upload') { // raw bytes; the custom header makes it impossible to send from a plain cross-site form
+      const origin = req.headers.origin;
+      if (origin && origin !== `${isSecure(req) ? 'https' : 'http'}://${req.headers.host}`) throw new HttpError(403, 'BAD_ORIGIN');
+      if (!req.headers['x-file-name']) throw new HttpError(400, 'INVALID_INPUT');
+      const { user, perms } = requireBoard(req);
+      const kind = url.searchParams.get('kind') === 'image' ? 'image' : 'file';
+      let name = ''; try { name = decodeURIComponent(String(req.headers['x-file-name'])); } catch { throw new HttpError(400, 'INVALID_INPUT'); }
+      const buf = await readBuffer(req, kind === 'image' ? BOARD_LIMITS.imageBytes : BOARD_LIMITS.fileBytes);
+      send(res, 200, boardCall(() => board.saveUpload(user, perms, { kind, name, buf }))); return true;
+    }
+    if (method === 'GET' && (m = path.match(/^\/api\/board\/files\/(\d+)$/))) {
+      const { user, perms } = requireBoard(req);
+      const f = boardCall(() => board.getFile(user, perms, Number(m[1])));
+      const disp = f.kind === 'image' ? 'inline' : 'attachment';
+      send(res, 200, f.data, { 'Content-Type': f.kind === 'image' ? f.mime : 'application/octet-stream', 'Cache-Control': 'private, max-age=3600',
+        'Content-Disposition': `${disp}; filename*=UTF-8''${encodeURIComponent(f.name)}`, 'Content-Security-Policy': "default-src 'none'; sandbox" });
+      return true;
+    }
+    // ---- manage
+    if (method === 'GET' && path === '/api/board/manage') { const { user } = requireBoard(req, true); send(res, 200, board.manageOverview(user)); return true; }
+    if (method === 'POST' && path === '/api/board/manage/boards') { checkPost(req); const { user } = requireBoard(req, true); const b = await readJson(req); send(res, 200, { id: boardCall(() => board.createBoard(user, b)) }); return true; }
+    if (method === 'POST' && (m = path.match(/^\/api\/board\/manage\/boards\/(\d+)$/))) { checkPost(req); const { user } = requireBoard(req, true); const b = await readJson(req); boardCall(() => board.updateBoard(user, Number(m[1]), b)); send(res, 200, { ok: true }); return true; }
+    if (method === 'POST' && (m = path.match(/^\/api\/board\/manage\/boards\/(\d+)\/categories$/))) { checkPost(req); const { user } = requireBoard(req, true); const b = await readJson(req); send(res, 200, { id: boardCall(() => board.addCategory(user, Number(m[1]), b)) }); return true; }
+    if ((m = path.match(/^\/api\/board\/manage\/categories\/(\d+)$/))) {
+      if (method === 'POST') { checkPost(req); const { user } = requireBoard(req, true); const b = await readJson(req); boardCall(() => board.renameCategory(user, Number(m[1]), b)); send(res, 200, { ok: true }); return true; }
+      if (method === 'DELETE') { checkPost(req, true); const { user } = requireBoard(req, true); boardCall(() => board.deleteCategory(user, Number(m[1]))); send(res, 200, { ok: true }); return true; }
+    }
+    throw new HttpError(404, 'NOT_FOUND');
   }
 
   const routes = {
@@ -436,6 +506,7 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
           if (!q.photoUser.get(Number(m[1]), user.tenant_id)) throw new HttpError(404, 'NO_PHOTO');
           return sendPhoto(req, res, Number(m[1]));
         }
+        if (await boardRoute(req, res, url)) return;
         const h = routes[`${req.method} ${url.pathname}`];
         if (!h) throw new HttpError(404, 'NOT_FOUND');
         return await h(req, res, url);

@@ -61,6 +61,34 @@ CREATE TABLE IF NOT EXISTS user_settings (
 CREATE TABLE IF NOT EXISTS user_layouts (
   user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, layout TEXT NOT NULL, updated_at INTEGER NOT NULL
 );
+-- 게시판: boards -> categories, posts, comments, files. Who may read / write / pin is decided per board by role grants
+-- (resource ids board.read.<id>, board.write.<id>, board.pin.<id>; board.manage for the board admin).
+CREATE TABLE IF NOT EXISTS boards (
+  id INTEGER PRIMARY KEY, tenant_id INTEGER NOT NULL REFERENCES tenants(id), name TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'active', created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS board_categories (
+  id INTEGER PRIMARY KEY, board_id INTEGER NOT NULL REFERENCES boards(id), name TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS posts (
+  id INTEGER PRIMARY KEY, tenant_id INTEGER NOT NULL, board_id INTEGER NOT NULL REFERENCES boards(id), category_id INTEGER,
+  title TEXT NOT NULL, body TEXT NOT NULL, author_id INTEGER NOT NULL, pinned INTEGER NOT NULL DEFAULT 0, required INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'active', views INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS posts_board ON posts(board_id, status, id DESC);
+CREATE TABLE IF NOT EXISTS post_reads (
+  user_id INTEGER NOT NULL, post_id INTEGER NOT NULL REFERENCES posts(id), read_at INTEGER NOT NULL, PRIMARY KEY (user_id, post_id)
+);
+CREATE TABLE IF NOT EXISTS comments (
+  id INTEGER PRIMARY KEY, tenant_id INTEGER NOT NULL, post_id INTEGER NOT NULL REFERENCES posts(id), author_id INTEGER NOT NULL,
+  body TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS comments_post ON comments(post_id, id);
+CREATE TABLE IF NOT EXISTS board_files (
+  id INTEGER PRIMARY KEY, tenant_id INTEGER NOT NULL, uploader_id INTEGER NOT NULL, post_id INTEGER, kind TEXT NOT NULL,
+  name TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL, data BLOB NOT NULL, created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS board_files_post ON board_files(post_id);
 CREATE TABLE IF NOT EXISTS server_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 -- one row per browser/device that turned on device notifications (Web Push)
 CREATE TABLE IF NOT EXISTS push_subscriptions (
