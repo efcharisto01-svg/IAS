@@ -2,6 +2,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { hashPassword } from './security.js';
+import { installProtection } from './audit.js';
+
+function installAudit(db) { installProtection(db); }
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tenants (
@@ -72,6 +75,7 @@ export function openDb(file) {
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
   // columns added after the first release (existing databases)
+  installAudit(db);
   const have = new Set(db.prepare('PRAGMA table_info(users)').all().map((c) => c.name));
   for (const col of ['phone', 'department', 'job_title']) if (!have.has(col)) db.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`);
   return db;

@@ -13,7 +13,7 @@
  *   Click cycle per column: first direction -> opposite direction -> back to the original order.
  *   First direction is asc, or desc when the header button has data-first="desc".
  *   Optional { col, dir } sets the initial sort (the authored order is still the "original").
- *   Returns { sort(col, dir), reset() }.
+ *   Returns { sort(col, dir), reset(), refresh() }. Call refresh() after rows were added/removed.
  */
 (function (global) {
   function stickyShadow(el) {
@@ -26,7 +26,7 @@
     opts = opts || {};
     const head = host.querySelector('.hboard-head'), body = host.querySelector('.hboard-body');
     const cols = Array.from(head.children);
-    const original = Array.from(body.querySelectorAll('.hboard-row')); // authored order = 원상복귀 target
+    const original = Array.from(body.querySelectorAll('.hboard-row')); // authored order = 원상복귀 target (see refresh())
     const val = (row, i) => { const c = row.children[i]; return c && c.dataset.v !== undefined ? c.dataset.v : (c ? c.textContent.trim() : ''); };
 
     function sort(i, dir) {
@@ -56,7 +56,10 @@
       else reset();
     }));
     if (opts.col != null) sort(opts.col, opts.dir || 'asc');
-    return { sort, reset };
+    // call after rows were added or removed: the current order becomes the new "original" order
+    function refresh() { original.length = 0; original.push(...body.querySelectorAll('.hboard-row')); cols.forEach((c) => c.removeAttribute('aria-sort')); }
+
+    return { sort, reset, refresh };
   }
 
   global.IAS = global.IAS || {};

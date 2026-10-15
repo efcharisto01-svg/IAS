@@ -8,6 +8,7 @@ import { loadVapid, sendPush, validSubscription } from './push.js';
 import { can } from './db.js';
 import { profileOf, updateContact, photoMime, savePhoto, getPhoto, deletePhoto, getSettings, updateSettings, uaLabel, PHOTO_MAX } from './profile.js';
 import { appsFor } from './apps.js';
+import { record, runWithContext, search as auditSearch, toCsv, purgeExpired, maskEmail, maskPhone, CATEGORIES } from './audit.js';
 import { hashPassword, verifyPassword, DUMMY_HASH, newToken, sha256, parseCookies, cookie, passwordProblem } from './security.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -47,8 +48,8 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       pending.add(job);
     }
   });
-  purgeOld(db);
-  const purgeTimer = setInterval(() => { try { purgeOld(db); } catch (e) { console.error(e); } }, 6 * 3600 * 1000);
+  purgeOld(db); purgeExpired(db);
+  const purgeTimer = setInterval(() => { try { purgeOld(db); purgeExpired(db); } catch (e) { console.error(e); } }, 6 * 3600 * 1000);
   purgeTimer.unref();
 
   const q = {
@@ -74,9 +75,10 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
     subUpsert: db.prepare('INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, ua, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, ua = excluded.ua'),
     subDel: db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?'),
     subDelAny: db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?'),
-    audit: db.prepare('INSERT INTO audit_log (at, tenant_id, user_id, event, ip, detail) VALUES (?, ?, ?, ?, ?, ?)'),
   };
-  const audit = (event, { tenantId = null, userId = null, ip = null, detail = null } = {}) => q.audit.run(now(), tenantId, userId, event, ip, detail);
+  // ip, user agent and request id come from the request context (runWithContext below)
+  const audit = (event, { category = 'security', tenantId = null, userId = null, ok = true, summary = null, data, app = null, target } = {}) =>
+    record(db, { category, event, tenantId, userId, ok, summary, data, app, target });
 
   const clientIp = (req) => (trustProxy && req.headers['x-forwarded-for']?.split(',')[0].trim()) || req.socket.remoteAddress || '';
   const isSecure = (req) => secure || req.headers['x-forwarded-proto'] === 'https';
@@ -157,6 +159,13 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
     return cur;
   }
 
+  /** The audit log is for company admins: needs the 'audit' app permission (admins have * ). */
+  function requireAudit(req) {
+    const cur = requireSession(req);
+    if (!can(effectivePermissions(db, cur.user.id), 'app', 'audit')) throw new HttpError(403, 'FORBIDDEN');
+    return cur;
+  }
+
   function publicUser(user) {
     const tenant = q.tenantById.get(user.tenant_id);
     return { id: user.id, loginId: user.login_id, name: user.name, tenant: { code: tenant.code, name: tenant.name } };
@@ -179,7 +188,7 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       if (!company || !userId || !password || company.length > 64 || userId.length > 128 || password.length > 128) throw new HttpError(400, 'INVALID_INPUT');
 
       const tenant = q.tenantByCode.get(company);
-      if (!tenant) { verifyPassword(password, DUMMY_HASH); ipFail(ip); throw new HttpError(404, 'COMPANY_NOT_FOUND'); }
+      if (!tenant) { verifyPassword(password, DUMMY_HASH); ipFail(ip); audit('login_fail', { ok: false, summary: '로그인 실패: 없는 회사 코드', data: { company: company.slice(0, 40), loginId: userId.slice(0, 40) } }); throw new HttpError(404, 'COMPANY_NOT_FOUND'); }
       const user = q.userByLogin.get(tenant.id, userId);
       const t = now();
       if (user && user.locked_until > t) {
@@ -190,19 +199,19 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
         ipFail(ip);
         if (user) {
           const n = user.failed_count + 1;
-          if (n >= MAX_FAILS) { q.fail.run(0, t + LOCK_SEC, user.id); audit('login_locked', { tenantId: tenant.id, userId: user.id, ip }); throw new HttpError(423, 'LOCKED', { retryAfter: LOCK_SEC }); }
+          if (n >= MAX_FAILS) { q.fail.run(0, t + LOCK_SEC, user.id); audit('login_locked', { tenantId: tenant.id, userId: user.id, ok: false, summary: `비밀번호를 ${MAX_FAILS}번 틀려 계정이 ${LOCK_SEC / 60}분간 잠겼습니다` }); throw new HttpError(423, 'LOCKED', { retryAfter: LOCK_SEC }); }
           q.fail.run(n, 0, user.id);
         }
-        audit('login_fail', { tenantId: tenant.id, userId: user?.id ?? null, ip, detail: user ? null : 'unknown_user' });
+        audit('login_fail', { tenantId: tenant.id, userId: user?.id ?? null, ok: false, summary: user ? '로그인 실패: 비밀번호 오류' : '로그인 실패: 없는 아이디', data: user ? undefined : { loginId: userId.slice(0, 40) } });
         throw new HttpError(401, 'INVALID_CREDENTIALS');
       }
-      if (user.status !== 'active') { audit('login_disabled', { tenantId: tenant.id, userId: user.id, ip }); throw new HttpError(403, 'ACCOUNT_DISABLED'); }
+      if (user.status !== 'active') { audit('login_disabled', { tenantId: tenant.id, userId: user.id, ok: false, summary: '사용이 중지된 계정으로 로그인 시도' }); throw new HttpError(403, 'ACCOUNT_DISABLED'); }
 
       q.ok.run(user.id);
       const sid = newToken(), ttl = b.remember === true ? REMEMBER_SEC : SESSION_SEC;
       q.purge.run(t);
       q.newSession.run(sha256(sid), user.id, tenant.id, t, t + ttl, ip, ua);
-      audit('login_ok', { tenantId: tenant.id, userId: user.id, ip });
+      audit('login_ok', { tenantId: tenant.id, userId: user.id, summary: '로그인' });
       send(res, 200, { user: publicUser(user), mustChangePassword: !!user.must_change_pw },
         { 'Set-Cookie': cookie(SID, sid, { maxAge: b.remember === true ? REMEMBER_SEC : undefined, secure: isSecure(req) }) });
     },
@@ -210,7 +219,7 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
     'POST /api/auth/logout': (req, res) => {
       checkPost(req);
       const cur = currentSession(req);
-      if (cur) { q.delSession.run(cur.sidHash); audit('logout', { tenantId: cur.s.tenant_id, userId: cur.user.id, ip: clientIp(req) }); }
+      if (cur) { q.delSession.run(cur.sidHash); audit('logout', { tenantId: cur.s.tenant_id, userId: cur.user.id, summary: '로그아웃' }); }
       send(res, 200, { ok: true }, { 'Set-Cookie': cookie(SID, '', { maxAge: 0, secure: isSecure(req) }) });
     },
 
@@ -226,7 +235,10 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       const { user } = requireSession(req);
       const err = updateContact(db, user.id, await readJson(req));
       if (err) throw new HttpError(400, err);
-      audit('profile_updated', { tenantId: user.tenant_id, userId: user.id, ip: clientIp(req) });
+      const after = q.userById.get(user.id), change = {};
+      if ((user.email || '') !== (after.email || '')) change.email = { from: maskEmail(user.email), to: maskEmail(after.email) };
+      if ((user.phone || '') !== (after.phone || '')) change.phone = { from: maskPhone(user.phone), to: maskPhone(after.phone) };
+      if (Object.keys(change).length) audit('profile_updated', { category: 'data', tenantId: user.tenant_id, userId: user.id, target: { type: 'user', id: user.id }, summary: `내 정보 수정: ${Object.keys(change).map((k) => (k === 'email' ? '이메일' : '전화번호')).join(', ')}`, data: change });
       send(res, 200, profileOf(db, q.userById.get(user.id), q.tenantById.get(user.tenant_id)));
     },
 
@@ -249,13 +261,14 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       const mime = photoMime(buf);
       if (!mime || mime !== req.headers['content-type'].split(';')[0]) throw new HttpError(400, 'INVALID_IMAGE');
       savePhoto(db, user.id, mime, buf);
+      audit('photo_changed', { category: 'data', tenantId: user.tenant_id, userId: user.id, target: { type: 'user', id: user.id }, summary: '프로필 사진 변경', data: { bytes: buf.length, mime } });
       send(res, 200, profileOf(db, user, q.tenantById.get(user.tenant_id)));
     },
 
     'POST /api/me/photo/delete': (req, res) => {
       checkPost(req);
       const { user } = requireSession(req);
-      deletePhoto(db, user.id);
+      if (deletePhoto(db, user.id)) audit('photo_removed', { category: 'data', tenantId: user.tenant_id, userId: user.id, target: { type: 'user', id: user.id }, summary: '프로필 사진 삭제' });
       send(res, 200, profileOf(db, user, q.tenantById.get(user.tenant_id)));
     },
 
@@ -267,7 +280,9 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
     'POST /api/me/sessions/logout-others': (req, res) => {
       checkPost(req);
       const { user, sidHash } = requireSession(req);
-      send(res, 200, { removed: Number(q.delOther.run(user.id, sidHash).changes) });
+      const removed = Number(q.delOther.run(user.id, sidHash).changes);
+      if (removed) audit('sessions_revoked_others', { tenantId: user.tenant_id, userId: user.id, summary: `다른 기기 ${removed}대에서 로그아웃`, data: { removed } });
+      send(res, 200, { removed });
     },
 
     'GET /api/notifications': (req, res, url) => {
@@ -291,7 +306,9 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       const b = await readJson(req);
       if (!validSubscription(b)) throw new HttpError(400, 'INVALID_SUBSCRIPTION');
       if (q.subCount.get(user.id).n >= 10 && !q.subs.all(user.id).some((s) => s.endpoint === b.endpoint)) throw new HttpError(400, 'TOO_MANY_DEVICES');
+      const prev = db.prepare('SELECT user_id FROM push_subscriptions WHERE endpoint = ?').get(b.endpoint);
       q.subUpsert.run(user.id, b.endpoint, b.keys.p256dh, b.keys.auth, String(req.headers['user-agent'] || '').slice(0, 200), now()); // a device that changes user is re-assigned
+      if (!prev || prev.user_id !== user.id) audit('device_notify_on', { tenantId: user.tenant_id, userId: user.id, summary: '기기 알림 켜기', data: { device: uaLabel(String(req.headers['user-agent'] || '')) } });
       send(res, 200, { ok: true });
     },
 
@@ -300,7 +317,23 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       const { user } = requireSession(req);
       const b = await readJson(req);
       if (typeof b.endpoint !== 'string') throw new HttpError(400, 'INVALID_INPUT');
-      send(res, 200, { removed: Number(q.subDel.run(b.endpoint, user.id).changes) });
+      const removed = Number(q.subDel.run(b.endpoint, user.id).changes);
+      if (removed) audit('device_notify_off', { tenantId: user.tenant_id, userId: user.id, summary: '기기 알림 끄기', data: { device: uaLabel(String(req.headers['user-agent'] || '')) } });
+      send(res, 200, { removed });
+    },
+
+    'GET /api/admin/audit': (req, res, url) => {
+      const { user } = requireAudit(req);
+      const p = url.searchParams;
+      send(res, 200, auditSearch(db, user.tenant_id, { from: p.get('from'), to: p.get('to'), category: p.get('category'), q: p.get('q'), before: p.get('before'), limit: Math.min(Number(p.get('limit')) || 100, 200) }));
+    },
+
+    'GET /api/admin/audit.csv': (req, res, url) => {
+      const { user } = requireAudit(req);
+      const p = url.searchParams;
+      const { items } = auditSearch(db, user.tenant_id, { from: p.get('from'), to: p.get('to'), category: p.get('category'), q: p.get('q'), limit: 50000 });
+      audit('audit_exported', { category: 'admin', tenantId: user.tenant_id, userId: user.id, summary: `감사 로그 CSV 내려받기 (${items.length}건)`, data: { rows: items.length, category: p.get('category'), from: p.get('from'), to: p.get('to'), q: p.get('q') } });
+      send(res, 200, Buffer.from(toCsv(items), 'utf8'), { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="audit-${new Date().toISOString().slice(0, 10)}.csv"` });
     },
 
     'POST /api/auth/change-password': async (req, res) => {
@@ -314,7 +347,7 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       if (b.next === b.current) throw new HttpError(400, 'SAME_PASSWORD');
       q.setPw.run(hashPassword(b.next), user.id);
       q.delOther.run(user.id, sidHash); // sign out every other device
-      audit('password_changed', { tenantId: user.tenant_id, userId: user.id, ip: clientIp(req) });
+      audit('password_changed', { tenantId: user.tenant_id, userId: user.id, summary: '비밀번호 변경 (다른 기기는 모두 로그아웃)' });
       send(res, 200, { ok: true });
     },
   };
@@ -337,6 +370,7 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
     res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
     try {
       const url = new URL(req.url, 'http://x');
+      return await runWithContext({ ip: clientIp(req), ua: String(req.headers['user-agent'] || '') }, async () => {
       if (url.pathname.startsWith('/api/')) {
         let m = req.method === 'POST' && url.pathname.match(/^\/api\/notifications\/(\d+)\/read$/);
         if (m) {
@@ -348,7 +382,9 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
         if (m) {
           checkPost(req);
           const { user, sidHash } = requireSession(req);
-          return send(res, 200, { removed: Number(q.delSessionById.run(Number(m[1]), user.id, sidHash).changes) });
+          const removed = Number(q.delSessionById.run(Number(m[1]), user.id, sidHash).changes);
+          if (removed) audit('session_revoked', { tenantId: user.tenant_id, userId: user.id, summary: '다른 기기 1대에서 로그아웃', target: { type: 'session', id: m[1] } });
+          return send(res, 200, { removed });
         }
         m = req.method === 'GET' && url.pathname.match(/^\/api\/users\/(\d+)\/photo$/);
         if (m) { // co-workers' photos: same company only
@@ -362,6 +398,7 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') throw new HttpError(405, 'METHOD_NOT_ALLOWED');
       await serveStatic(req, res, url);
+      });
     } catch (e) {
       if (e instanceof HttpError) return send(res, e.status, { code: e.code, ...(e.extra || {}) });
       console.error(e);

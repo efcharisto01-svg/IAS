@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#dfe9ff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1020" media="(prefers-color-scheme: dark)">
+<title>IAS 감사 로그</title>
+<script src="js/theme.js"></script>
+<link rel="stylesheet" href="css/glass.css">
+<style>
+  /* 레이아웃만. 색·모양은 공용 부품(glass.css)을 쓴다. */
+  .page { max-width: 920px; margin: 0 auto; padding: 8px 14px calc(24px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 12px; }
+  .filters { padding: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .filters .field + .field { margin-top: 0; }
+  .filters .wide { grid-column: 1 / -1; }
+  .filters .actions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .filters label.lab { display: block; margin: 0 4px 4px; font-size: 12px; color: var(--text-2); }
+  @media (min-width: 720px) { .filters { grid-template-columns: repeat(4, minmax(0, 1fr)); } .filters .wide { grid-column: span 2; } .filters .actions { grid-column: span 2; } }
+  .hboard { --cols: 12px minmax(0, 1fr) 70px 82px; height: calc(100dvh - 330px); min-height: 320px; }
+  @media (min-width: 720px) { .hboard { height: calc(100dvh - 300px); } }
+  .meta { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 0 4px; font-size: 13px; color: var(--text-2); }
+  .state { padding: 28px 16px; text-align: center; color: var(--text-2); font-size: 14px; }
+  .denied { padding: 28px 18px; text-align: center; }
+  .more { margin: 10px 12px 14px; width: calc(100% - 24px); }
+</style>
+</head>
+<body>
+<div class="backdrop" aria-hidden="true"><i></i><i></i><i></i></div>
+<main class="page" id="page">
+  <section class="glass filters rise" style="--i:0" id="filters" aria-label="검색 조건" hidden>
+    <div><label class="lab" for="from">시작일</label>
+      <div class="field"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><input id="from" type="date"></div></div>
+    <div><label class="lab" for="to">종료일</label>
+      <div class="field"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><input id="to" type="date"></div></div>
+    <div><label class="lab" for="cat">구분</label>
+      <div class="field combo" id="catBox">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+        <input id="cat" type="text" role="combobox" aria-label="구분" aria-autocomplete="list" aria-expanded="false" aria-controls="catList" placeholder="전체" autocomplete="off" readonly>
+        <button type="button" class="trailing" tabindex="-1" aria-label="구분 목록 열기"><svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
+        <ul class="combo-list" id="catList" role="listbox" aria-label="구분 목록" hidden></ul>
+      </div></div>
+    <div class="wide"><label class="lab" for="q">검색</label>
+      <div class="field"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="q" type="search" placeholder="사용자, 내용, IP" autocomplete="off" enterkeyhint="search"></div></div>
+    <div class="actions"><button class="btn btn-primary" id="go" type="button"><span>검색</span></button><button class="btn btn-glass" id="csv" type="button">CSV 내려받기</button></div>
+  </section>
+
+  <div class="meta" id="meta" hidden><span id="count"></span><span>시각이 없는 쪽이 오래된 기록입니다</span></div>
+
+  <section class="hboard rise" style="--i:1" id="board" aria-label="감사 로그" hidden>
+    <div class="hboard-head" role="row">
+      <button class="sort dotcol" type="button" data-first="desc" aria-label="실패한 항목 먼저"></button>
+      <button class="sort" type="button">내용</button>
+      <button class="sort" type="button">사용자</button>
+      <button class="sort" type="button" data-first="desc">시각</button>
+    </div>
+    <div class="hboard-body" id="rows"></div>
+  </section>
+
+  <section class="glass denied" id="denied" hidden><p>이 화면은 회사 관리자만 볼 수 있습니다.</p></section>
+</main>
+<script src="js/push.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/profile.js"></script>
+<script src="js/topbar.js"></script>
+<script src="js/combobox.js"></script>
+<script src="js/list.js"></script>
+<script src="js/audit.js"></script>
+</body>
+</html>
