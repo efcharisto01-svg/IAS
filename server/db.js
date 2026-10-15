@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { hashPassword } from './security.js';
 import { installProtection } from './audit.js';
+import { installChangeLog, withoutLog } from './changelog.js';
 
 function installAudit(db) { installProtection(db); }
 
@@ -78,6 +79,7 @@ export function openDb(file) {
   installAudit(db);
   const have = new Set(db.prepare('PRAGMA table_info(users)').all().map((c) => c.name));
   for (const col of ['phone', 'department', 'job_title']) if (!have.has(col)) db.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`);
+  installChangeLog(db);
   return db;
 }
 
@@ -87,6 +89,11 @@ export const now = () => Math.floor(Date.now() / 1000);
 export const DEMO_PASSWORD = 'Demo1234!';
 export function seedDemo(db) {
   if (db.prepare('SELECT COUNT(*) AS n FROM tenants').get().n > 0) return false;
+  withoutLog(db, () => seedRows(db));
+  return true;
+}
+
+function seedRows(db) {
   const tenants = [['acme', '에이씨엠이 주식회사'], ['daehan', '대한물산'], ['hanbit', '한빛정보통신'], ['sunrise', '선라이즈 테크'],
     ['myeongin', '명인식품'], ['nuri', '누리건설'], ['bluesea', '블루씨 로지스틱스'], ['greenfield', '그린필드 에너지'],
     ['hana', '하나메디칼'], ['onda', '온다 미디어']];

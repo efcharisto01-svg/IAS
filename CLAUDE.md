@@ -52,3 +52,12 @@
 - 프로필 사진: 브라우저가 512px 정사각 JPEG로 줄여 올리고, 서버는 JPEG/PNG/WebP 형식과 1MB 이하만 DB에 저장. 같은 회사 사람의 사진만 `/api/users/:id/photo`로 볼 수 있다.
 - 앱별 알림 끄기: 서버 `server/apps.js`의 `registerApp({ id, name })`로 앱을 등록하면 프로필 > 알림 설정에 자동으로 나타난다. 꺼 둔 앱의 알림은 만들어지지 않는다(`notify()`가 `null` 반환). 시스템 알림은 끌 수 없다.
 - 로그인한 기기: `/api/me/sessions`로 목록, 기기별 로그아웃, 다른 모든 기기 로그아웃(현재 기기는 항상 유지).
+
+## 로그기록 규칙 (변경 기록 + 로그인·보안 기록)
+- **변경 기록**: DB의 모든 칼럼 변경을 DB 트리거가 자동으로 남긴다. 형식은 `칼럼명(table.column) / 한글명 / 변경전 / 변경후 / 작업일시(초까지) / 변경자`. 변경전이 없던 데이터면 빈칸, 삭제했으면 변경후가 빈칸. 비밀번호 해시는 `[숨김]`, 사진 같은 이진 데이터는 `[이진 데이터 N바이트]`. 화면은 `log.html`(앱 id `audit`, 회사 관리자 전용), CSV 내려받기 가능.
+- **새 테이블·칼럼을 만들면** `server/changelog.js`의 `TRACKED`에 **모든 칼럼의 한글명**과 함께 넣거나 `UNTRACKED`에 이유와 함께 넣는다. 안 하면 서버가 시작되지 않고 테스트가 실패한다(조용히 빠지는 일이 없도록).
+- **작성자 기록**: 로그인한 사용자의 DB 쓰기는 반드시 `asUser(db, user, () => { ...동기 쓰기... })` 안에서 한다. 밖에서 쓰면 변경자가 "시스템"으로 남는다. 시드·마이그레이션은 `withoutLog(db, fn)`.
+- 변경 기록에서 일부러 뺀 칼럼: `users.failed_count`, `users.locked_until` (잦은 변경, 로그인 기록에 남음). 일부러 뺀 테이블: `sessions`, `push_subscriptions`, `notifications`, `server_settings`, 로그 테이블 자신.
+- **로그인·보안 기록**(`audit_log`): 로그인 성공/실패/잠금, 로그아웃, 비밀번호 변경, 다른 기기 로그아웃, 기기 알림 켜기/끄기, 로그 CSV 내려받기. `GET /api/admin/audit` (화면은 아직 없음). 앱이 만드는 "기록할 만한 행위"는 `record(db, { category: 'data'|'admin'|'security', event, userId, app, target, summary, data })`.
+- 수정·삭제 불가: 두 로그 모두 DB 트리거로 수정을 막고, 보관 기간(3년 이상, `IAS_AUDIT_RETENTION_DAYS`, 기본 1095일)이 지난 행만 서버가 자동 삭제한다. 로그 파일(DB)은 서버 밖으로 주기적으로 복사해 둔다.
+- 로그에는 비밀번호·토큰·세션 값을 절대 넣지 않는다(`sanitize`가 키 이름으로 걸러냄).

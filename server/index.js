@@ -8,6 +8,7 @@ import { loadVapid, sendPush, validSubscription } from './push.js';
 import { can } from './db.js';
 import { profileOf, updateContact, photoMime, savePhoto, getPhoto, deletePhoto, getSettings, updateSettings, uaLabel, PHOTO_MAX } from './profile.js';
 import { appsFor } from './apps.js';
+import { asUser, searchChanges, changesToCsv, purgeChanges } from './changelog.js';
 import { record, runWithContext, search as auditSearch, toCsv, purgeExpired, maskEmail, maskPhone, CATEGORIES } from './audit.js';
 import { hashPassword, verifyPassword, DUMMY_HASH, newToken, sha256, parseCookies, cookie, passwordProblem } from './security.js';
 
@@ -48,8 +49,8 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       pending.add(job);
     }
   });
-  purgeOld(db); purgeExpired(db);
-  const purgeTimer = setInterval(() => { try { purgeOld(db); purgeExpired(db); } catch (e) { console.error(e); } }, 6 * 3600 * 1000);
+  purgeOld(db); purgeExpired(db); purgeChanges(db);
+  const purgeTimer = setInterval(() => { try { purgeOld(db); purgeExpired(db); purgeChanges(db); } catch (e) { console.error(e); } }, 6 * 3600 * 1000);
   purgeTimer.unref();
 
   const q = {
@@ -233,7 +234,8 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
     'PUT /api/me/profile': async (req, res) => {
       checkPost(req);
       const { user } = requireSession(req);
-      const err = updateContact(db, user.id, await readJson(req));
+      const body = await readJson(req);
+      const err = asUser(db, user, () => updateContact(db, user.id, body));
       if (err) throw new HttpError(400, err);
       const after = q.userById.get(user.id), change = {};
       if ((user.email || '') !== (after.email || '')) change.email = { from: maskEmail(user.email), to: maskEmail(after.email) };
@@ -247,7 +249,8 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
     'PUT /api/me/settings': async (req, res) => {
       checkPost(req);
       const { user } = requireSession(req);
-      const err = updateSettings(db, user.id, await readJson(req));
+      const body = await readJson(req);
+      const err = asUser(db, user, () => updateSettings(db, user.id, body));
       if (err) throw new HttpError(400, err);
       send(res, 200, getSettings(db, user.id));
     },
@@ -260,7 +263,7 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       const buf = await readBuffer(req, PHOTO_MAX);
       const mime = photoMime(buf);
       if (!mime || mime !== req.headers['content-type'].split(';')[0]) throw new HttpError(400, 'INVALID_IMAGE');
-      savePhoto(db, user.id, mime, buf);
+      asUser(db, user, () => savePhoto(db, user.id, mime, buf));
       audit('photo_changed', { category: 'data', tenantId: user.tenant_id, userId: user.id, target: { type: 'user', id: user.id }, summary: '프로필 사진 변경', data: { bytes: buf.length, mime } });
       send(res, 200, profileOf(db, user, q.tenantById.get(user.tenant_id)));
     },
@@ -268,7 +271,7 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
     'POST /api/me/photo/delete': (req, res) => {
       checkPost(req);
       const { user } = requireSession(req);
-      if (deletePhoto(db, user.id)) audit('photo_removed', { category: 'data', tenantId: user.tenant_id, userId: user.id, target: { type: 'user', id: user.id }, summary: '프로필 사진 삭제' });
+      if (asUser(db, user, () => deletePhoto(db, user.id))) audit('photo_removed', { category: 'data', tenantId: user.tenant_id, userId: user.id, target: { type: 'user', id: user.id }, summary: '프로필 사진 삭제' });
       send(res, 200, profileOf(db, user, q.tenantById.get(user.tenant_id)));
     },
 
@@ -328,6 +331,20 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       send(res, 200, auditSearch(db, user.tenant_id, { from: p.get('from'), to: p.get('to'), category: p.get('category'), q: p.get('q'), before: p.get('before'), limit: Math.min(Number(p.get('limit')) || 100, 200) }));
     },
 
+    'GET /api/admin/changes': (req, res, url) => {
+      const { user } = requireAudit(req);
+      const p = url.searchParams;
+      send(res, 200, searchChanges(db, user.tenant_id, { from: p.get('from'), to: p.get('to'), q: p.get('q'), table: p.get('table'), before: p.get('before'), limit: Math.min(Number(p.get('limit')) || 100, 200) }));
+    },
+
+    'GET /api/admin/changes.csv': (req, res, url) => {
+      const { user } = requireAudit(req);
+      const p = url.searchParams;
+      const { items } = searchChanges(db, user.tenant_id, { from: p.get('from'), to: p.get('to'), q: p.get('q'), table: p.get('table'), limit: 50000 });
+      audit('changes_exported', { category: 'admin', tenantId: user.tenant_id, userId: user.id, summary: `변경 기록 CSV 내려받기 (${items.length}건)`, data: { rows: items.length, q: p.get('q'), from: p.get('from'), to: p.get('to') } });
+      send(res, 200, Buffer.from(changesToCsv(items), 'utf8'), { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="changes-${new Date().toISOString().slice(0, 10)}.csv"` });
+    },
+
     'GET /api/admin/audit.csv': (req, res, url) => {
       const { user } = requireAudit(req);
       const p = url.searchParams;
@@ -345,7 +362,8 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       const problem = passwordProblem(b.next);
       if (problem) throw new HttpError(400, 'WEAK_PASSWORD', { message: problem });
       if (b.next === b.current) throw new HttpError(400, 'SAME_PASSWORD');
-      q.setPw.run(hashPassword(b.next), user.id);
+      const newHash = hashPassword(b.next);
+      asUser(db, user, () => q.setPw.run(newHash, user.id));
       q.delOther.run(user.id, sidHash); // sign out every other device
       audit('password_changed', { tenantId: user.tenant_id, userId: user.id, summary: '비밀번호 변경 (다른 기기는 모두 로그아웃)' });
       send(res, 200, { ok: true });

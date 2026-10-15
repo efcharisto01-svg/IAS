@@ -1,38 +1,30 @@
 /*
- * 감사 로그 화면 (회사 관리자 전용). GET /api/admin/audit, /api/admin/audit.csv
- * The server decides who may read it ('audit' permission) and which company's rows are returned.
+ * 로그기록 (회사 관리자 전용): 칼럼명 / 한글명 / 변경전 / 변경후 / 작업일시 / 변경자
+ * GET /api/admin/changes, /api/admin/changes.csv. The server decides who may read it ('audit' permission)
+ * and returns only this company's rows. Empty 변경전 = there was no data before, empty 변경후 = it was deleted.
  */
 (async () => {
   const $ = (id) => document.getElementById(id);
   const me = await IAS.auth.require();
-  IAS.topbar.mount({ title: '감사 로그', me });
+  IAS.topbar.mount({ title: '로그기록', me });
   if (!IAS.auth.can(me, 'app', 'audit')) { $('denied').hidden = false; return; }
   ['filters', 'meta', 'board'].forEach((id) => { $(id).hidden = false; });
 
-  const CATEGORY = { security: '로그인·보안', data: '데이터 변경', admin: '관리자 작업' };
-  const cat = IAS.combo($('catBox'), { items: [{ value: '', label: '전체' }, ...Object.entries(CATEGORY).map(([value, label]) => ({ value, label }))], emptyText: '목록에 없습니다' });
-  cat.set('');
-  const rowsEl = $('rows'), board = $('board');
-  const sorter = IAS.sortable(board);
+  const rowsEl = $('rows'), sorter = IAS.sortable($('board'));
   IAS.stickyShadow(rowsEl);
 
   const pad = (n) => String(n).padStart(2, '0');
   const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  const today = new Date(), weekAgo = new Date(Date.now() - 6 * 86400000);
-  $('from').value = iso(weekAgo); $('to').value = iso(today);
+  $('from').value = iso(new Date(Date.now() - 6 * 86400000)); $('to').value = iso(new Date());
 
   function params(extra = {}) {
     const p = new URLSearchParams();
     if ($('from').value) p.set('from', Math.floor(new Date($('from').value + 'T00:00:00').getTime() / 1000));
     if ($('to').value) p.set('to', Math.floor(new Date($('to').value + 'T23:59:59').getTime() / 1000));
-    if (cat.value) p.set('category', cat.value);
     if ($('q').value.trim()) p.set('q', $('q').value.trim());
     for (const [k, v] of Object.entries(extra)) p.set(k, v);
     return p;
   }
-
-  const fmt = (sec) => { const d = new Date(sec * 1000); return `${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-  const full = (sec) => new Date(sec * 1000).toLocaleString('ko-KR');
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
 
   let items = [], hasMore = false, busy = false;
@@ -40,14 +32,12 @@
   function draw() {
     rowsEl.textContent = '';
     items.forEach((r) => {
-      const row = el('div', 'hboard-row' + (r.ok ? '' : ' unread')); row.setAttribute('role', 'row');
-      row.title = [full(r.at), `${CATEGORY[r.category] || r.category} · ${r.event}`, r.summary, r.actor ? `사용자: ${r.actorName || ''} (${r.actor})` : '', r.ip ? `IP: ${r.ip}` : '', r.ua ? `기기: ${r.ua}` : '',
-        r.targetType ? `대상: ${r.targetType}:${r.targetId}` : '', r.req ? `요청: ${r.req}` : ''].filter(Boolean).join('\n');
-      const dot = el('span', 'dot'); dot.dataset.v = r.ok ? '0' : '1';
-      const ti = el('span', 'ti'); ti.appendChild(el('b', null, `${CATEGORY[r.category] || r.category} · ${r.summary || r.event}`));
-      const wr = el('span', 'wr', r.actorName || r.actor || '-');
-      const dt = el('span', 'dt', fmt(r.at)); dt.dataset.v = String(r.at);
-      row.append(dot, ti, wr, dt); rowsEl.appendChild(row);
+      const row = el('div', 'hboard-row'); row.setAttribute('role', 'row');
+      row.title = `${r.tableLabel} #${r.rowId}\n${r.column}\n${r.time}`;
+      const col = el('span', 'ti', r.column), label = el('span', 'ti', r.label), before = el('span', 'wr', r.before), after = el('span', 'wr', r.after);
+      const when = el('span', 'dt', r.time.replace(' ', '\n')); when.dataset.v = String(r.at);
+      const who = el('span', 'wr', r.actorName);
+      row.append(col, label, before, after, when, who); rowsEl.appendChild(row);
     });
     if (!items.length) rowsEl.appendChild(el('div', 'state', '조건에 맞는 기록이 없습니다'));
     if (hasMore) { const b = el('button', 'btn btn-glass more', '더 보기'); b.type = 'button'; b.addEventListener('click', () => load(false)); rowsEl.appendChild(b); }
@@ -59,7 +49,7 @@
     if (busy) return; busy = true;
     try {
       const extra = { limit: 100 }; if (!reset && items.length) extra.before = items[items.length - 1].id;
-      const r = await fetch('/api/admin/audit?' + params(extra), { credentials: 'same-origin' });
+      const r = await fetch('/api/admin/changes?' + params(extra), { credentials: 'same-origin' });
       if (r.status === 401) return location.replace('login.html?next=' + encodeURIComponent(location.pathname));
       if (r.status === 403) { $('denied').hidden = false; ['filters', 'meta', 'board'].forEach((id) => { $(id).hidden = true; }); return; }
       if (!r.ok) throw new Error('load');
@@ -72,6 +62,6 @@
 
   $('go').addEventListener('click', () => load(true));
   $('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') load(true); });
-  $('csv').addEventListener('click', () => { location.href = '/api/admin/audit.csv?' + params(); });
+  $('csv').addEventListener('click', () => { location.href = '/api/admin/changes.csv?' + params(); });
   load(true);
 })();

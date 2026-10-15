@@ -100,6 +100,7 @@
 
 
 *, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; } /* component classes set display, which would otherwise beat the hidden attribute */
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
@@ -219,14 +220,14 @@ body {
 
 /* pill scrollbar: no track, no arrows, one rounded thumb sized to the content */
 .scroll-glass, .combo-list, .hboard-body, .notif-list, .pscroll { overflow-y: auto; }
-.scroll-glass::-webkit-scrollbar, .combo-list::-webkit-scrollbar, .hboard-body::-webkit-scrollbar, .notif-list::-webkit-scrollbar, .pscroll::-webkit-scrollbar { width: 12px; background: transparent; }
+.scroll-glass::-webkit-scrollbar, .combo-list::-webkit-scrollbar, .hboard-body::-webkit-scrollbar, .notif-list::-webkit-scrollbar, .pscroll::-webkit-scrollbar { width: 12px; height: 12px; background: transparent; }
 .scroll-glass::-webkit-scrollbar-track, .combo-list::-webkit-scrollbar-track, .hboard-body::-webkit-scrollbar-track, .notif-list::-webkit-scrollbar-track, .pscroll::-webkit-scrollbar-track { background: transparent; margin-block: 14px; }
 .hboard-body::-webkit-scrollbar-track, .notif-list::-webkit-scrollbar-track, .pscroll::-webkit-scrollbar-track { margin-block: 8px 14px; }
 .scroll-glass::-webkit-scrollbar-button, .combo-list::-webkit-scrollbar-button, .hboard-body::-webkit-scrollbar-button, .notif-list::-webkit-scrollbar-button, .pscroll::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 .scroll-glass::-webkit-scrollbar-corner, .combo-list::-webkit-scrollbar-corner, .hboard-body::-webkit-scrollbar-corner, .notif-list::-webkit-scrollbar-corner, .pscroll::-webkit-scrollbar-corner { background: transparent; }
 .scroll-glass::-webkit-scrollbar-thumb, .combo-list::-webkit-scrollbar-thumb, .hboard-body::-webkit-scrollbar-thumb, .notif-list::-webkit-scrollbar-thumb, .pscroll::-webkit-scrollbar-thumb {
   background: var(--scroll-thumb); background-clip: padding-box;
-  border: 4px solid transparent; border-radius: 999px; min-height: 40px;
+  border: 4px solid transparent; border-radius: 999px; min-height: 40px; min-width: 40px;
 }
 .scroll-glass::-webkit-scrollbar-thumb:hover, .combo-list::-webkit-scrollbar-thumb:hover, .hboard-body::-webkit-scrollbar-thumb:hover, .notif-list::-webkit-scrollbar-thumb:hover, .pscroll::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); background-clip: padding-box; }
 /* Firefox (Chrome 121+ would ignore the webkit rules above if these were set unconditionally) */
