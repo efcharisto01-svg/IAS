@@ -1,7 +1,8 @@
 /*
  * IAS shared top bar: title, notification bell, profile avatar (css: .topbar, .ibtn, .badge, .avatar, .notif-*)
  *   const me = await IAS.auth.require();
- *   IAS.topbar.mount({ title: '홈', me });
+ *   IAS.topbar.mount({ title: '홈', me, actions: [{ id: 'edit', label: '수정', onClick: (btn) => {} }] });  // actions are optional text buttons left of the bell
+ *   returns { refresh, setActionLabel(id, label), destroy }
  *
  * - Bell: unread count badge. Panel: "전체 N건 · 안 읽음 M건". Clicking a notification marks it read and opens its page.
  * - Avatar: opens the profile panel (js/profile.js): my info, photo, notification / screen settings, devices, logout.
@@ -36,7 +37,7 @@
   }
   const post = (path) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: '{}', keepalive: true });
 
-  function mount({ title = '', me } = {}) {
+  function mount({ title = '', me, actions = [] } = {}) {
     document.body.classList.add('has-topbar');
     if (me && me.settings && global.IAS.theme) global.IAS.theme.apply(me.settings.theme); // account theme wins over this device's cache
 
@@ -47,6 +48,8 @@
     bell.type = 'button'; bell.setAttribute('aria-label', '알림'); bell.setAttribute('aria-haspopup', 'dialog'); bell.setAttribute('aria-expanded', 'false'); bell.setAttribute('aria-controls', 'notifPanel');
     bell.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>';
     const badge = el('span', 'badge', '0'); badge.hidden = true; bell.appendChild(badge);
+    const actionEls = {};
+    actions.forEach((a) => { const b = el('button', 'topbar-action', a.label); b.type = 'button'; b.addEventListener('click', () => a.onClick(b)); actionEls[a.id] = b; tools.appendChild(b); });
     tools.appendChild(bell);
     const avatar = el('button', 'avatar'); avatar.type = 'button';
     avatar.setAttribute('aria-label', '프로필'); avatar.setAttribute('aria-haspopup', 'dialog'); avatar.setAttribute('aria-expanded', 'false'); avatar.setAttribute('aria-controls', 'profilePanel');
@@ -140,6 +143,7 @@
 
     return {
       refresh,
+      setActionLabel(id, label) { if (actionEls[id]) actionEls[id].textContent = label; },
       destroy() {
         destroyed = true; stop(); document.removeEventListener('keydown', onKey); document.removeEventListener('pointerdown', onDown, true); document.removeEventListener('visibilitychange', onVis);
         if (profile) profile.destroy(); bar.remove(); scrim.remove(); panel.remove(); document.body.classList.remove('has-topbar');

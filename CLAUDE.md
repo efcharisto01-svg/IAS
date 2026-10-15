@@ -18,11 +18,12 @@
 | 로그인 확인·권한·로그아웃 | | `js/auth.js` (`IAS.auth.require`, `can`, `logout`) |
 | 기기 알림 (Web Push, 서비스 워커) | (프로필 > 알림 설정의 스위치) | `js/push.js` (`IAS.push`), `sw.js` |
 | 프로필 패널 (사진, 내 정보, 알림·화면 설정, 로그인한 기기, 로그아웃) | `.profile-panel` `.pview` `.me-card` `.me-photo` `.menu-group` `.menu-row` `.switch` `.segmented` `.pf-field` `.dev-row` `.toast` | `js/profile.js` (`IAS.profile.attach`, 상단 바가 자동으로 붙임) |
+| 홈 화면 (위젯 그리드 + 앱 아이콘 그리드, 수정 모드·폴더·크기 조절 바) | `.home` `.widgets` `.widget` `.apps` `.app` `.fico` `.edit-x` `.splitter` `.sheet` `.folder-panel` | `js/home.js`, `js/widgets.js` (`IAS.widgets.define`) |
 | 테마 (시스템·라이트·다크, `<head>`에서 먼저 로드) | `html[data-theme]` | `js/theme.js` (`IAS.theme`) |
 | 상단 바 + 알림 (종, 안 읽음 숫자, 알림 패널, 프로필 사진 버튼) | `.topbar` `.ibtn` `.badge` `.avatar` `.notif-panel` `.notif-item` `.has-topbar` | `js/topbar.js` (`IAS.topbar.mount`) |
 
 ## 화면 계획
-- 홈: 위젯 그리드 + 앱 아이콘 그리드. 폰/태블릿 세로는 위아래, 태블릿 가로(`min-width: 900px` + landscape)는 좌우.
+- 홈(구현됨, `home.html`): 위젯 그리드 + 앱 아이콘 그리드. 폰/태블릿 세로는 위아래로 이어서 한 번에 스크롤, 태블릿 가로(`min-width: 900px` + landscape)는 좌우 + 가운데 크기 조절 바. 배치는 사용자별로 서버에 저장(`/api/me/layout`).
 - 시안과 구조도는 아티팩트로 먼저 보여 주고 확정 후 구현한다.
 
 ## 서버 (Node.js 22 + SQLite, 외부 패키지 없음)
@@ -61,3 +62,11 @@
 - **로그인·보안 기록**(`audit_log`): 로그인 성공/실패/잠금, 로그아웃, 비밀번호 변경, 다른 기기 로그아웃, 기기 알림 켜기/끄기, 로그 CSV 내려받기. `GET /api/admin/audit` (화면은 아직 없음). 앱이 만드는 "기록할 만한 행위"는 `record(db, { category: 'data'|'admin'|'security', event, userId, app, target, summary, data })`.
 - 수정·삭제 불가: 두 로그 모두 DB 트리거로 수정을 막고, 보관 기간(3년 이상, `IAS_AUDIT_RETENTION_DAYS`, 기본 1095일)이 지난 행만 서버가 자동 삭제한다. 로그 파일(DB)은 서버 밖으로 주기적으로 복사해 둔다.
 - 로그에는 비밀번호·토큰·세션 값을 절대 넣지 않는다(`sanitize`가 키 이름으로 걸러냄).
+
+## 앱·위젯 만들기 (같이 만든다)
+1. **서버**: `server/modules.js`에 `registerApp({ id, name, color, link, icon?, notifies? })`와 `registerWidget({ id, name, size, tall?, script, app })`를 추가한다. 권한 항목은 앱 `kind='app'`, 위젯 `kind='widget'`의 id. 관리자(`*`)는 자동으로 모두 받고, 일반 역할은 `role_grants`/`user_grants`로 준다.
+2. **화면**: 앱 페이지(`link`)는 `IAS.auth.require()` + `IAS.topbar.mount()`를 쓰고, 서버 API는 **반드시 권한을 다시 확인**한다.
+3. **위젯**: `script`에 적은 파일 `js/widgets/<이름>.js`에서 `IAS.widgets.define(id, { render(body, ctx) {...; return { stop() {} }} })`. 서버 데이터는 `textContent`/DOM으로만 그린다(`innerHTML` 금지). 카드를 누르면 앱 페이지로 이동한다.
+4. **데이터**: 새 테이블은 `server/changelog.js`에 모든 칼럼의 한글명과 함께 등록, 쓰기는 `asUser()` 안에서, 필요하면 `notify()`로 알림.
+5. 홈은 사용자가 쓸 수 있는 앱·위젯만 보여 주며, 새 앱은 맨 끝에 자동으로 나타나고 새 위젯은 "위젯 추가"에서 고른다.
+- 현재 앱: **로그기록**(id `audit`, 위젯 `audit.recent`, 회사 관리자 전용, `log.html`).

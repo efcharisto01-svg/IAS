@@ -34,6 +34,7 @@ export const UNTRACKED = {
   sessions: '로그인 세션: 로그인한 기기 목록과 로그인 기록으로 확인',
   push_subscriptions: '기기 알림 구독(키 값): 로그인 기록에 켜기/끄기가 남음',
   notifications: '알림 본문과 읽음 표시: 양이 많고 변경 의미가 없음',
+  user_layouts: '홈 화면 배치(위젯·앱 순서, 폴더): 끌 때마다 바뀌는 개인 화면 설정',
   audit_log: '로그인·보안 기록 자체', change_log: '변경 기록 자체', audit_ctx: '작성자 전달용 내부 표', server_settings: '서버 내부 설정(키)',
 };
 

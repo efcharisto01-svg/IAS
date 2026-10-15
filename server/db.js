@@ -58,6 +58,9 @@ CREATE TABLE IF NOT EXISTS user_photos (
 CREATE TABLE IF NOT EXISTS user_settings (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (user_id, key)
 );
+CREATE TABLE IF NOT EXISTS user_layouts (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, layout TEXT NOT NULL, updated_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS server_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 -- one row per browser/device that turned on device notifications (Web Push)
 CREATE TABLE IF NOT EXISTS push_subscriptions (

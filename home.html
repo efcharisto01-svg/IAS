@@ -8,35 +8,22 @@
 <title>IAS 홈</title>
 <script src="js/theme.js"></script>
 <link rel="stylesheet" href="css/glass.css">
-<style>
-  /* 임시 화면: 로그인 결과(사용자, 역할, 허용된 앱과 위젯)를 확인하는 용도. 홈 화면 확정 후 교체한다. */
-  .page { min-height: calc(100dvh - 64px - env(safe-area-inset-top, 0px)); display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom)); max-width: 480px; margin: 0 auto; }
-  .card { padding: 20px 18px; }
-  h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -.4px; }
-  dl { margin: 14px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; font-size: 15px; }
-  dt { color: var(--text-2); }
-  dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-  .pill { display: inline-block; margin: 0 4px 4px 0; padding: 2px 10px; border-radius: 999px; background: var(--field-bg); font-size: 13px; }
-</style>
 </head>
 <body>
 <div class="backdrop" aria-hidden="true"><i></i><i></i><i></i></div>
-<main class="page">
-  <section class="glass card rise" style="--i:0">
-    <h1 id="hello">로그인 확인 중…</h1>
-    <p class="muted" id="co"></p>
-    <dl>
-      <dt>역할</dt><dd id="roles"></dd>
-      <dt>허용된 앱</dt><dd id="apps"></dd>
-      <dt>허용된 위젯</dt><dd id="widgets"></dd>
-    </dl>
+<main class="home" id="home">
+  <section class="home-w" id="gw" aria-label="위젯"><div class="widgets" id="widgets"></div></section>
+  <div class="splitter" id="split" role="separator" tabindex="0" aria-label="위젯 영역과 앱 영역 크기 조절" aria-orientation="vertical" aria-valuemin="20" aria-valuemax="88"></div>
+  <section class="home-a" id="ga" aria-label="앱">
+    <div class="apps" id="apps"></div>
+    <div class="app-tray"><small>숨긴 앱 (눌러서 다시 보이기)</small><div class="chips" id="trayChips"></div><button class="tray-reset" id="trayReset" type="button">기본 배치로 되돌리기</button></div>
   </section>
-  <button class="btn btn-glass rise" style="--i:1" id="logout" type="button">로그아웃</button>
 </main>
 <script src="js/push.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/profile.js"></script>
 <script src="js/topbar.js"></script>
-<script src="js/home-check.js"></script>
+<script src="js/widgets.js"></script>
+<script src="js/home.js"></script>
 </body>
 </html>

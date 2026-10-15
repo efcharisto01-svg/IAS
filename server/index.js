@@ -7,7 +7,9 @@ import { listFor, markRead, markAllRead, purgeOld, notify, onNotify } from './no
 import { loadVapid, sendPush, validSubscription } from './push.js';
 import { can } from './db.js';
 import { profileOf, updateContact, photoMime, savePhoto, getPhoto, deletePhoto, getSettings, updateSettings, uaLabel, PHOTO_MAX } from './profile.js';
-import { appsFor } from './apps.js';
+import { appsFor, catalogFor } from './apps.js';
+import './modules.js';
+import { cleanLayout, saveLayout, resetLayout, layoutFor } from './layout.js';
 import { asUser, searchChanges, changesToCsv, purgeChanges } from './changelog.js';
 import { record, runWithContext, search as auditSearch, toCsv, purgeExpired, maskEmail, maskPhone, CATEGORIES } from './audit.js';
 import { hashPassword, verifyPassword, DUMMY_HASH, newToken, sha256, parseCookies, cookie, passwordProblem } from './security.js';
@@ -228,7 +230,7 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       const { user } = requireSession(req);
       const permissions = effectivePermissions(db, user.id);
       send(res, 200, { user: profileOf(db, user, q.tenantById.get(user.tenant_id)), mustChangePassword: !!user.must_change_pw,
-        roles: q.roles.all(user.id), permissions, settings: getSettings(db, user.id), apps: appsFor(permissions) });
+        roles: q.roles.all(user.id), permissions, settings: getSettings(db, user.id), apps: appsFor(permissions), catalog: catalogFor(permissions) });
     },
 
     'PUT /api/me/profile': async (req, res) => {
@@ -242,6 +244,30 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
       if ((user.phone || '') !== (after.phone || '')) change.phone = { from: maskPhone(user.phone), to: maskPhone(after.phone) };
       if (Object.keys(change).length) audit('profile_updated', { category: 'data', tenantId: user.tenant_id, userId: user.id, target: { type: 'user', id: user.id }, summary: `내 정보 수정: ${Object.keys(change).map((k) => (k === 'email' ? '이메일' : '전화번호')).join(', ')}`, data: change });
       send(res, 200, profileOf(db, q.userById.get(user.id), q.tenantById.get(user.tenant_id)));
+    },
+
+    'GET /api/me/layout': (req, res) => {
+      const { user } = requireSession(req);
+      const catalog = catalogFor(effectivePermissions(db, user.id));
+      send(res, 200, { catalog, layout: layoutFor(db, user.id, catalog) });
+    },
+
+    'PUT /api/me/layout': async (req, res) => {
+      checkPost(req);
+      const { user } = requireSession(req);
+      const clean = cleanLayout(await readJson(req));
+      if (!clean) throw new HttpError(400, 'INVALID_LAYOUT');
+      saveLayout(db, user.id, clean);
+      const catalog = catalogFor(effectivePermissions(db, user.id));
+      send(res, 200, { catalog, layout: layoutFor(db, user.id, catalog) });
+    },
+
+    'POST /api/me/layout/reset': (req, res) => {
+      checkPost(req);
+      const { user } = requireSession(req);
+      resetLayout(db, user.id);
+      const catalog = catalogFor(effectivePermissions(db, user.id));
+      send(res, 200, { catalog, layout: layoutFor(db, user.id, catalog) });
     },
 
     'GET /api/me/settings': (req, res) => { const { user } = requireSession(req); send(res, 200, getSettings(db, user.id)); },
@@ -374,7 +400,7 @@ export function createApp({ dbFile = join(ROOT, 'data', 'ias.db'), secure = fals
     let p = decodeURIComponent(url.pathname);
     if (p === '/') p = '/index.html';
     const norm = normalize(p).replace(/^([/\\])+/, '');
-    const ok = /^[\w.-]+\.html$/.test(norm) || norm === 'sw.js' || /^(css|js)[/\\][\w.-]+\.(css|js)$/.test(norm);
+    const ok = /^[\w.-]+\.html$/.test(norm) || norm === 'sw.js' || /^(css|js)([/\\][\w.-]+)?[/\\][\w.-]+\.(css|js)$/.test(norm);
     if (!ok || norm.split(sep).includes('..')) return send(res, 404, 'Not found');
     try {
       const buf = await readFile(join(ROOT, norm));
