@@ -22,6 +22,14 @@
 | 테마 (시스템·라이트·다크, `<head>`에서 먼저 로드) | `html[data-theme]` | `js/theme.js` (`IAS.theme`) |
 | 상단 바 + 알림 (종, 안 읽음 숫자, 알림 패널, 프로필 사진 버튼) | `.topbar` `.ibtn` `.badge` `.avatar` `.notif-panel` `.notif-item` `.has-topbar` | `js/topbar.js` (`IAS.topbar.mount`) |
 | 게시판 부품 (여러 줄 입력, 목록 작은 표시, 본문, 첨부 한 줄, 댓글) | `.textarea` `.tag`(`.req` `.pin` `.cnt`) `.post-body` `.attach`(`.nm` `.sz` `.rm`) `.cmt` | |
+| 버튼 변형·배치 | `.btn-danger` `.btn-text` `.btn-auto` `.btn-sm` `.btn-icon` `.btn-row`(`.end` `.even`) `.page` `.card` `.stack` `.cluster` | |
+| 폼 보조 | `.label` `.hint` `.errmsg` `.check`(체크·라디오) `.select` | |
+| 안내·상태 | `.alert`(`.ok` `.warn` `.err`) `.state` `.denied` `.skeleton` `.spinner.dark` `.progress` | |
+| 이동·선택 | `.chip` `.tabs`/`.tab` `.pager` `.crumbs` | |
+| 게시판 형태 (카드형, 줄 목록, 표, 항목-값) | `.cboard`/`.ccard` `.lboard`/`.lrow` `.table` `.kv` | |
+| 토스트·확인창·대화상자 | `.toast`(`.err`) `.modal-back` `.modal` | `js/ui.js` (`IAS.ui.toast`, `confirm`, `modal`) |
+
+**전체 부품은 `components.html`(공용 부품 목록)에서 눈으로 보고 복사해 쓴다.** 부품을 추가하면 그 페이지(`js/components.js`)에도 예시를 넣는다.
 
 ## 화면 계획
 - 홈(구현됨, `home.html`): 위젯 그리드 + 앱 아이콘 그리드. 폰/태블릿 세로는 위아래로 이어서 한 번에 스크롤, 태블릿 가로(`min-width: 900px` + landscape)는 좌우 + 가운데 크기 조절 바. 배치는 사용자별로 서버에 저장(`/api/me/layout`).

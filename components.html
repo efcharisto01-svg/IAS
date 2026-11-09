@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IAS 공용 부품</title>
+<script src="js/theme.js"></script>
+<link rel="stylesheet" href="css/glass.css">
+<style>
+  /* 레이아웃만. 이 페이지는 공용 부품 목록이다: 새 화면을 만들 때 여기서 골라 복사한다. */
+  .sec { padding: 16px; display: grid; gap: 12px; }
+  .sec h2 { margin: 0; font-size: 17px; }
+  .sec h2 small { margin-left: 8px; font-size: 12px; font-weight: 400; color: var(--text-3); font-family: ui-monospace, Menlo, monospace; }
+  .demo { display: grid; gap: 10px; padding: 14px; border-radius: var(--r-md); background: var(--field-bg); }
+  code.use { display: block; padding: 10px 12px; border-radius: var(--r-sm); background: var(--field-bg); font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-2); }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+</style>
+</head>
+<body class="">
+<div class="backdrop"><i></i><i></i><i></i></div>
+<main class="page">
+  <h1 style="margin:16px 4px 0;font-size:26px">IAS 공용 부품</h1>
+  <p class="muted" style="margin:0 4px">화면을 만들 때는 여기 있는 부품만 쓴다. 없는 것이 필요하면 새로 만들지 말고 먼저 물어본다. 다크 모드는 프로필 &gt; 화면 설정, 또는 기기 설정을 따른다.</p>
+  <div class="cluster"><button class="chip" id="themeL">라이트</button><button class="chip" id="themeD">다크</button><button class="chip" id="themeS">시스템</button></div>
+  <div id="root" class="stack"></div>
+</main>
+<script src="js/combobox.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/components.js"></script>
+</body>
+</html>
